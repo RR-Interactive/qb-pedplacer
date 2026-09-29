@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ped Placer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="hidden">
+  <div class="app-shell">
+
+    <div class="topbar">
+      <div class="tb-left">
+        <img src="logo.png" class="tb-logo" alt="">
+        <div class="tb-title">
+          <div class="tb-dept">RR INTERACTIVE</div>
+          <div class="tb-app">Ped Placer</div>
+        </div>
+      </div>
+      <div class="tb-search">
+        <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="searchInput" placeholder="Search ped models...">
+      </div>
+      <div class="tb-right">
+        <div class="tb-clock" id="tbClock"></div>
+        <button class="tb-ic" id="closeBtn">&times;</button>
+      </div>
+    </div>
+
+    <div class="app-body">
+
+      <aside class="sidebar">
+        <div class="side-label">Categories</div>
+        <nav class="nav" id="catNav"></nav>
+
+        <div class="side-label">Tools</div>
+        <nav class="nav">
+          <button class="nav-btn" id="btnGroups"><span class="nv-ic">&#128101;</span> Groups</button>
+          <button class="nav-btn" id="btnRadios"><span class="nv-ic">&#128251;</span> Radios</button>
+          <button class="nav-btn" id="btnDetectors"><span class="nv-ic">&#128269;</span> Metal Detectors</button>
+          <button class="nav-btn" id="btnClassic"><span class="nv-ic">&#9776;</span> Classic Menu</button>
+        </nav>
+
+        <div class="side-label">Recently Used</div>
+        <div class="recent-list" id="recentList"></div>
+
+        <div class="sidebar-foot"><span class="sys-ok">&#9679; Connected</span></div>
+      </aside>
+
+      <main class="content">
+        <div class="grid-head">
+          <div class="grid-title" id="gridTitle">All Peds</div>
+          <div class="grid-count" id="gridCount"></div>
+        </div>
+        <div class="model-grid" id="modelGrid"></div>
+        <div class="keybar">
+          <span class="kb"><b>RMB</b> Place</span>
+          <span class="kb"><b>Scroll</b> Rotate</span>
+          <span class="kb"><b>LMB</b> Cancel</span>
+          <span class="kb"><b>ESC</b> Close Menu</span>
+        </div>
+      </main>
+
+      <aside class="rightpanel">
+        <div class="rp-tabs">
+          <button class="rp-tab active" data-panel="settings">Ped Settings</button>
+          <button class="rp-tab" data-panel="scenario">Scenario</button>
+          <button class="rp-tab" data-panel="manage">Manage</button>
+        </div>
+
+        <!-- ─── PED SETTINGS ─── -->
+        <div class="rp-panel active" id="panel-settings">
+          <div class="rp-sec">Ped Model</div>
+          <div class="model-chip" id="modelChip">
+            <div class="mc-avatar" id="mcAvatar">?</div>
+            <div class="mc-meta">
+              <div class="mc-label" id="mcLabel">No ped selected</div>
+              <div class="mc-model" id="mcModel">Pick one from the grid</div>
+            </div>
+          </div>
+          <input class="rp-input" id="customModel" placeholder="...or type any model name">
+          <input class="rp-input" id="pedLabel" placeholder="Label (optional)">
+
+          <div class="rp-sec">Position</div>
+          <div class="pos-row">
+            <div class="pos-box"><span>X</span><input id="posX" readonly></div>
+            <div class="pos-box"><span>Y</span><input id="posY" readonly></div>
+            <div class="pos-box"><span>Z</span><input id="posZ" readonly></div>
+          </div>
+          <div class="rp-hint">Exact spot is set in-game with the placement ghost.</div>
+
+          <div class="rp-sec">Heading</div>
+          <div class="slider-row">
+            <input type="range" id="headingSlider" min="0" max="360" step="1" value="0">
+            <div class="slider-val" id="headingVal">0&deg;</div>
+          </div>
+
+          <div class="rp-sec">Appearance</div>
+          <div class="rp-field">
+            <label>Scenario</label>
+            <button class="rp-select" id="scenarioBtn">None (Idle)</button>
+          </div>
+          <div class="rp-field">
+            <label>Behavior</label>
+            <select class="rp-selectel" id="behaviorSel">
+              <option value="idle">Idle (Stand Still)</option>
+              <option value="scenario">Play Scenario</option>
+              <option value="wander">Wander in Area</option>
+              <option value="patrol">Patrol Route</option>
+              <option value="interact">Interact with Nearby</option>
+              <option value="bartender">Bartender (Serves Drinks)</option>
+              <option value="casino_standard">Casino Dealer — Standard</option>
+              <option value="casino_high">Casino Dealer — High-Limit</option>
+            </select>
+          </div>
+          <div class="rp-field hidden" id="wanderField">
+            <label>Wander Radius (m)</label>
+            <input class="rp-input" id="wanderRadius" type="number" min="5" max="100" value="15">
+          </div>
+          <div class="rp-field hidden" id="patrolField">
+            <label>Patrol Speed (1 walk / 2 run)</label>
+            <input class="rp-input" id="patrolSpeed" type="number" min="0.5" max="3" step="0.1" value="1.0">
+          </div>
+          <div class="rp-field hidden" id="interactField">
+            <label>Interaction</label>
+            <select class="rp-selectel" id="interactSel"></select>
+          </div>
+          <div class="rp-field">
+            <label>Weapon</label>
+            <select class="rp-selectel" id="weaponSel"></select>
+          </div>
+          <button class="rp-ghostbtn" id="emoteBtn">&#127917; Browse Emote Animations&hellip;</button>
+
+          <div class="check-grid">
+            <label class="chk"><input type="checkbox" id="chkInvincible" checked><span></span>Invincible</label>
+            <label class="chk"><input type="checkbox" id="chkFrozen" checked><span></span>Freeze Position</label>
+          </div>
+          <input class="rp-input" id="groupName" placeholder="Group name (optional)">
+
+          <button class="place-btn" id="placeBtn">&#129485; Place Ped</button>
+        </div>
+
+        <!-- ─── SCENARIO ─── -->
+        <div class="rp-panel" id="panel-scenario">
+          <input class="rp-input" id="scenarioSearch" placeholder="Search scenarios...">
+          <div class="scen-list" id="scenList"></div>
+        </div>
+
+        <!-- ─── MANAGE ─── -->
+        <div class="rp-panel" id="panel-manage">
+          <div class="manage-head">
+            <input class="rp-input" id="manageSearch" placeholder="Search placed peds...">
+            <button class="rp-ghostbtn slim" id="refreshBtn">&#8635; Refresh</button>
+          </div>
+          <div class="ped-list" id="pedList"></div>
+          <button class="danger-btn" id="deleteAllBtn">&#128465; Delete ALL Peds</button>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
