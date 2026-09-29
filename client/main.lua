@@ -1,24 +1,23 @@
--- ═══════════════════════════════════════════════════════════
---  STATE
--- ═══════════════════════════════════════════════════════════
+
+-- state
 local SpawnedPeds   = {}   -- [dbId] = { handle, data, thread }
 local PreviewPed    = nil
 local IsPlacing     = false
 local isLoggedIn    = false
-local PlacerDataLoaded = false -- false → the streaming loop refetches every placed row (first spawn AND after a character switch)
+local PlacerDataLoaded = false -- false -> the streaming loop refetches every placed row (first spawn and after a character switch)
 local AllPedData    = {}
 local PatrolThreads = {} -- [dbId] = true (tracks active patrol/wander threads)
-local FailedPeds    = {} -- [dbId] = true (invalid model — logged once, never retried)
+local FailedPeds    = {} -- [dbId] = true (invalid model, logged once, never retried)
 local HealTries     = {} -- [dbId] = how many times we've rebuilt a ped that left its placed spot (4 = gave up)
 local HealNextAt    = {} -- [dbId] = GetGameTimer() before which we won't rebuild it again
-local HiddenGroups  = {} -- [group_name] = true → peds in this group stay despawned (e.g. a closed business)
-local HiddenAreas   = {} -- [key] = { x, y, r } → peds within this 2D radius stay despawned (e.g. a closed venue)
-local ClaimedPeds   = {} -- [dbId] = true → another resource (rr-girlfriend) owns this ped's entity; never (re)spawn our copy
-local HeldPeds      = {} -- [dbId] = true → another resource (rr-gangwar) is driving this ped's fight: no stray snap-back, no behaviour thread
+local HiddenGroups  = {} -- [group_name] = true -> peds in this group stay despawned (e.g. a closed business)
+local HiddenAreas   = {} -- [key] = { x, y, r } -> peds within this 2D radius stay despawned (e.g. a closed venue)
+local ClaimedPeds   = {} -- [dbId] = true -> another resource (rr-girlfriend) owns this ped's entity; never (re)spawn our copy
+local HeldPeds      = {} -- [dbId] = true -> another resource (rr-gangwar) is driving this ped's fight: no stray snap-back, no behaviour thread
 
 -- Home Control bridge state (rr-homecontrol)
 local PartyAreas         = {} -- [key] = { x, y, z, r, mode = 'party'|'away', anims, excludeModels, excludeBehaviors, exit, walkMs, graceUntil }
-local DisabledRadioAreas = {} -- [key] = { x, y, r } → speaker zones inside stay silent while a home's music is off
+local DisabledRadioAreas = {} -- [key] = { x, y, r } -> speaker zones inside stay silent while a home's music is off
 local NextBehaviorToken  = 0  -- each behavior thread gets a unique token so starting a new one invalidates the old instantly
 
 -- Radio state
@@ -30,9 +29,7 @@ local SpawnedDetectors   = {}  -- [dbId] = { prop = objHandle, data = row }
 local AllDetectorData    = {}
 local DetectorTriggered  = {}  -- [dbId] = true while player is inside the scan radius (debounce)
 
--- ═══════════════════════════════════════════════════════════
---  HELPERS
--- ═══════════════════════════════════════════════════════════
+-- helpers
 
 local function LoadModel(model)
     local hash = type(model) == 'number' and model or joaat(model)
@@ -47,12 +44,12 @@ local function LoadModel(model)
     return hash
 end
 
---- Add-on streamed peds can come out of CreatePed with no component variation
---- applied at all — solid but invisible. Force drawable 0 / texture 0 on every
---- component for the models flagged in Config.AddonPeds.
---- Deliberately unconditional (no GetNumberOfPedDrawableVariations guard): in
---- the failing case the variations aren't enumerable in the first place, so
---- guarding on the count would skip exactly the peds that need this.
+-- Add-on streamed peds can come out of CreatePed with no component variation
+-- applied at all, solid but invisible. Force drawable 0 / texture 0 on every
+-- component for the models flagged in Config.AddonPeds.
+-- Deliberately unconditional (no GetNumberOfPedDrawableVariations guard): in
+-- the failing case the variations aren't enumerable in the first place, so
+-- guarding on the count would skip exactly the peds that need this.
 local function ApplyAddonPedVariation(ped, modelName)
     if not modelName or not Config.AddonPeds then return end
     if not Config.AddonPeds[string.lower(tostring(modelName))] then return end
@@ -91,11 +88,9 @@ local function GetCoordsFromCam(distance)
     return hit and endCoords or target
 end
 
--- ═══════════════════════════════════════════════════════════
---  BEHAVIOR ENGINE
--- ═══════════════════════════════════════════════════════════
+-- behavior engine
 
---- Start a wander behavior for a ped
+-- Start a wander behavior for a ped
 local function StartWanderBehavior(dbId, ped, originX, originY, originZ, radius)
     if PatrolThreads[dbId] then return end
     NextBehaviorToken = NextBehaviorToken + 1
@@ -130,7 +125,7 @@ local function StartWanderBehavior(dbId, ped, originX, originY, originZ, radius)
     end)
 end
 
---- Start a patrol route behavior
+-- Start a patrol route behavior
 local function StartPatrolBehavior(dbId, ped, points, speed)
     if PatrolThreads[dbId] then return end
     if not points or #points < 2 then return end
@@ -163,7 +158,7 @@ local function StartPatrolBehavior(dbId, ped, points, speed)
     end)
 end
 
---- Start an interact behavior (face a nearby ped and play scenario)
+-- Start an interact behavior (face a nearby ped and play scenario)
 local function StartInteractBehavior(dbId, ped, interactType, originX, originY, originZ)
     if PatrolThreads[dbId] then return end
     NextBehaviorToken = NextBehaviorToken + 1
@@ -223,20 +218,20 @@ local function StartInteractBehavior(dbId, ped, interactType, originX, originY, 
     end)
 end
 
---- Keep a TaskPlayAnim-based "scenario" alive.
---- Unlike real GTA scenarios (TaskStartScenarioInPlace), which the ped's
---- scenario brain self-maintains, a one-shot TaskPlayAnim is routinely cleared
---- by the ped's ambient brain — so placed anim-peds (counting money, drug
---- handoff, stripper dances, weed/coke/meth ops) would play for a frame and
---- then silently revert to standing idle. This thread:
----   1. VALIDATES the dict — an invalid dict name never loads, so we log it
----      loudly (a bad dict in Config.Scenarios becomes visible in F8), and
----   2. VALIDATES the clip — a valid dict with a wrong clip loads fine but
----      TaskPlayAnim then silently does nothing, so we check IsEntityPlayingAnim
----      after the first attempt and warn once if the clip never starts, and
----   3. re-applies the loop whenever the ped falls out of it.
---- Where a ped row says the ped belongs. Heading is normalized because some rows
---- were saved past 360 (the placement rotate loop doesn't wrap in every path).
+-- Keep a TaskPlayAnim-based "scenario" alive.
+-- Unlike real GTA scenarios (TaskStartScenarioInPlace), which the ped's
+-- scenario brain self-maintains, a one-shot TaskPlayAnim is routinely cleared
+-- by the ped's ambient brain, so placed anim-peds (counting money, drug
+-- handoff, stripper dances, weed/coke/meth ops) would play for a frame and
+-- then silently revert to standing idle. This thread:
+--   1. validates the dict, an invalid dict name never loads, so we log it
+--      loudly (a bad dict in Config.Scenarios becomes visible in F8), and
+--   2. validates the clip, a valid dict with a wrong clip loads fine but
+--      TaskPlayAnim then silently does nothing, so we check IsEntityPlayingAnim
+--      after the first attempt and warn once if the clip never starts, and
+--   3. re-applies the loop whenever the ped falls out of it.
+-- Where a ped row says the ped belongs. Heading is normalized because some rows
+-- were saved past 360 (the placement rotate loop doesn't wrap in every path).
 local function PedAnchor(d)
     return {
         x = d.x, y = d.y, z = d.z,
@@ -244,10 +239,10 @@ local function PedAnchor(d)
     }
 end
 
---- `anchor` ({x,y,z,heading}) is where the ped was placed. TaskPlayAnim applies
---- the clip's root motion to the entity, so a looping clip nudges/rotates the ped
---- a little on every pass and over a session that adds up to a ped standing in the
---- wrong spot facing the wrong way. Pass it and the loop pulls the ped back.
+-- `anchor` ({x,y,z,heading}) is where the ped was placed. TaskPlayAnim applies
+-- the clip's root motion to the entity, so a looping clip nudges/rotates the ped
+-- a little on every pass and over a session that adds up to a ped standing in the
+-- wrong spot facing the wrong way. Pass it and the loop pulls the ped back.
 local function StartAnimLoop(dbId, ped, dict, name, anchor)
     if PatrolThreads[dbId] then return end
     NextBehaviorToken = NextBehaviorToken + 1
@@ -262,7 +257,7 @@ local function StartAnimLoop(dbId, ped, dict, name, anchor)
             waited = waited + 50
         end
         if not HasAnimDictLoaded(dict) then
-            print(('^1[qb-pedplacer]^0 Ped #%s: anim DICTIONARY "%s" is invalid (does not exist in-game) — the ped will stand idle. Fix the dict in Config.Scenarios.')
+            print(('^1[qb-pedplacer]^0 Ped #%s: anim DICTIONARY "%s" is invalid (does not exist in-game) - the ped will stand idle. Fix the dict in Config.Scenarios.')
                 :format(tostring(dbId), tostring(dict)))
             if PatrolThreads[dbId] == myToken then PatrolThreads[dbId] = nil end
             return
@@ -281,7 +276,7 @@ local function StartAnimLoop(dbId, ped, dict, name, anchor)
                     warnedBadClip = true
                     Wait(300)
                     if DoesEntityExist(ped) and not IsEntityPlayingAnim(ped, dict, name, 3) then
-                        print(('^1[qb-pedplacer]^0 Ped #%s: dict "%s" loaded but clip "%s" will not play — the CLIP name is wrong. Fix it in Config.Scenarios.')
+                        print(('^1[qb-pedplacer]^0 Ped #%s: dict "%s" loaded but clip "%s" will not play - the CLIP name is wrong. Fix it in Config.Scenarios.')
                             :format(tostring(dbId), tostring(dict), tostring(name)))
                     end
                 end
@@ -311,9 +306,9 @@ local function StartAnimLoop(dbId, ped, dict, name, anchor)
     end)
 end
 
---- Is this row a ped SITTING via a real GTA scenario (not an anim clip)?
---- Seated scenarios are placed by TaskStartScenarioAtPosition, which owns both
---- the position AND the heading — see StartSeatLoop for why that matters.
+-- Is this row a ped sitting via a real GTA scenario (not an anim clip)?
+-- Seated scenarios are placed by TaskStartScenarioAtPosition, which owns both
+-- the position and the heading, see StartSeatLoop for why that matters.
 local function IsSeatedScenario(d, animDict)
     return (d.behavior or 'idle') == 'scenario'
         and (animDict == nil or animDict == '')
@@ -321,24 +316,24 @@ local function IsSeatedScenario(d, animDict)
         and d.scenario:find('SEAT') ~= nil
 end
 
---- Keep a SEATED scenario ped parked in its chair, facing the way it was placed.
----
---- TaskStartScenarioAtPosition does not sit the ped ON the coords you hand it:
---- the seat clip carries its own root offset and alignment, so the game settles
---- the entity at a fixed offset from the scenario point and turns it to suit the
---- clip. That is fine — the ped looks right — but it means the entity heading the
---- ped ends up holding is NOT the heading in the database row.
----
---- The old code then re-asserted the row's heading with SetEntityHeading (the
---- generic fix for standing peds). On a seated ped that rotates the entity about
---- its origin while the body sits offset from it, so the ped swung sideways out
---- of the chair and ended up facing the wrong way on every respawn — the "ped
---- drifts left and won't sit forward after a restart" bug.
----
---- So: let the scenario own the pose, and correct only REAL drift. We let the
---- sit settle, record the pose the game chose, and from then on pull the ped back
---- by re-issuing the scenario AT THE ROW'S ANCHOR (never at the ped's current
---- coords, so nothing can accumulate across respawns).
+-- Keep a seated scenario ped parked in its chair, facing the way it was placed.
+--
+-- TaskStartScenarioAtPosition does not sit the ped ON the coords you hand it:
+-- the seat clip carries its own root offset and alignment, so the game settles
+-- the entity at a fixed offset from the scenario point and turns it to suit the
+-- clip. That is fine, the ped looks right, but it means the entity heading the
+-- ped ends up holding is not the heading in the database row.
+--
+-- The old code then re-asserted the row's heading with SetEntityHeading (the
+-- generic fix for standing peds). On a seated ped that rotates the entity about
+-- its origin while the body sits offset from it, so the ped swung sideways out
+-- of the chair and ended up facing the wrong way on every respawn, the "ped
+-- drifts left and won't sit forward after a restart" bug.
+--
+-- So: let the scenario own the pose, and correct only real drift. We let the
+-- sit settle, record the pose the game chose, and from then on pull the ped back
+-- by re-issuing the scenario AT the row's anchor (never at the ped's current
+-- coords, so nothing can accumulate across respawns).
 local function StartSeatLoop(dbId, ped, scenario, anchor)
     local function applyScenario()
         -- z - 1.0: the sit pose anchors the pelvis ~1m above the ped's root, so a
@@ -348,7 +343,7 @@ local function StartSeatLoop(dbId, ped, scenario, anchor)
             anchor.heading, 0, true, true)
     end
 
-    -- Sit down FIRST, unconditionally — the keep-alive below is maintenance, so a
+    -- Sit down first, unconditionally, the keep-alive below is maintenance, so a
     -- stale thread token must never be able to leave the ped standing up.
     applyScenario()
 
@@ -384,19 +379,17 @@ local function StartSeatLoop(dbId, ped, scenario, anchor)
     end)
 end
 
---- Stop any active behavior thread for a ped
+-- Stop any active behavior thread for a ped
 local function StopBehavior(dbId)
     PatrolThreads[dbId] = nil
 end
 
--- ═══════════════════════════════════════════════════════════
---  HOME CONTROL BRIDGE HELPERS (rr-homecontrol)
+--  home control bridge helpers (rr-homecontrol)
 --  Lets a home control panel drive already-placed peds in an area:
 --  party = dance loops, chill = restore placed behavior, away =
 --  walk out and stay despawned until brought back.
--- ═══════════════════════════════════════════════════════════
 
---- Is this ped row inside the area and not excluded from control?
+-- Is this ped row inside the area and not excluded from control?
 local function PedMatchesArea(d, area)
     local dx, dy = d.x - area.x, d.y - area.y
     if (dx * dx + dy * dy) > (area.r * area.r) then return false end
@@ -409,7 +402,7 @@ local function PedMatchesArea(d, area)
     return true
 end
 
---- First active party area this ped row falls in (nil if none)
+-- First active party area this ped row falls in (nil if none)
 local function PedPartyArea(d)
     for _, area in pairs(PartyAreas) do
         if PedMatchesArea(d, area) then return area end
@@ -417,9 +410,9 @@ local function PedPartyArea(d)
     return nil
 end
 
---- Put one spawned ped into party mode: back to its placed spot, then a
---- dance loop kept alive by StartAnimLoop. Anim choice is dbId-stable so
---- each guest keeps their dance across respawns but the crowd is varied.
+-- Put one spawned ped into party mode: back to its placed spot, then a
+-- dance loop kept alive by StartAnimLoop. Anim choice is dbId-stable so
+-- each guest keeps their dance across respawns but the crowd is varied.
 local function ApplyPartyAnim(dbId, ped, d, area)
     local anims = area.anims
     if not anims or #anims == 0 then return end
@@ -431,17 +424,15 @@ local function ApplyPartyAnim(dbId, ped, d, area)
     StartAnimLoop(dbId, ped, a.dict, a.anim, PedAnchor(d))
 end
 
--- ═══════════════════════════════════════════════════════════
---  SCULLY EMOTE MENU BRIDGE
---  Pull scully_emotemenu's emote library so a placed ped can use ANY emote
+-- scully emote menu bridge
+--  Pull scully_emotemenu's emote library so a placed ped can use any emote
 --  (dances, prop emotes, etc.) as a looping "scenario". An emote is just an
 --  anim dict + clip (+ optional held props), which maps straight onto the
 --  placer's existing anim_dict/anim_name + StartAnimLoop engine. The library
---  is read at runtime from scully's shared files (declared in its files{}),
---  so it always reflects whatever emotes scully currently ships — no copy to
+--  is read at runtime from scully's shared files (declared in its files{})
+--  so it always reflects whatever emotes scully currently ships, no copy to
 --  keep in sync. Synchronized emotes are intentionally skipped (they need a
 --  second live player and can't run on a static ped).
--- ═══════════════════════════════════════════════════════════
 local EMOTE_RESOURCE = 'scully_emotemenu'
 local EMOTE_FILES = {
     { key = 'general',    file = 'general_emotes',    icon = '🙂' },
@@ -457,7 +448,7 @@ local function EmotesAvailable()
     return GetResourceState(EMOTE_RESOURCE) == 'started'
 end
 
---- Read + cache scully's emote tables. Returns true if at least one loaded.
+-- Read + cache scully's emote tables. Returns true if at least one loaded.
 function LoadEmoteLibrary()
     if EmoteCategories then return #EmoteCategories > 0 end
     if not EmotesAvailable() then return false end
@@ -493,9 +484,9 @@ local function Vec3ToTable(v)
     return { x = (v.x or 0.0) + 0.0, y = (v.y or 0.0) + 0.0, z = (v.z or 0.0) + 0.0 }
 end
 
---- Turn a scully emote entry into the concrete (dict, clip, propsList) a placed
---- ped needs. Random dict/clip pools are resolved ONCE here so the ped's pose is
---- deterministic for the rest of its life.
+-- Turn a scully emote entry into the concrete (dict, clip, propsList) a placed
+-- ped needs. Random dict/clip pools are resolved once here so the ped's pose is
+-- deterministic for the rest of its life.
 function ResolveEmote(emote)
     local dict, anim = emote.Dictionary, emote.Animation
     if type(dict) == 'table' and type(anim) == 'table' then
@@ -520,12 +511,10 @@ function ResolveEmote(emote)
     return dict, anim, props
 end
 
--- ═══════════════════════════════════════════════════════════
---  EMOTE PROP ATTACH / DETACH  (held items for prop/consumable emotes)
--- ═══════════════════════════════════════════════════════════
+--  emote prop attach / detach  (held items for prop/consumable emotes)
 
---- Spawn + bone-attach the held props of an emote-based scenario ped.
---- Returns a list of object handles (stored on the SpawnedPeds entry) or nil.
+-- Spawn + bone-attach the held props of an emote-based scenario ped.
+-- Returns a list of object handles (stored on the SpawnedPeds entry) or nil.
 local function AttachEmoteProps(ped, data)
     if (data.behavior or 'idle') ~= 'scenario' then return nil end
 
@@ -560,7 +549,7 @@ local function AttachEmoteProps(ped, data)
     return #objs > 0 and objs or nil
 end
 
---- Delete a ped's attached emote props (called on despawn / cull / wipe).
+-- Delete a ped's attached emote props (called on despawn / cull / wipe).
 local function DeleteEmoteProps(props)
     if not props then return end
     for _, obj in ipairs(props) do
@@ -571,11 +560,9 @@ local function DeleteEmoteProps(props)
     end
 end
 
--- ═══════════════════════════════════════════════════════════
---  PED SPAWNING
--- ═══════════════════════════════════════════════════════════
+-- PED spawning
 
--- Apply the static, always-on flags a placed ped needs: heading, invincibility,
+-- Apply the static, always-on flags a placed ped needs: heading, invincibility
 -- combat/ragdoll behavior and weapon. Kept separate from StartBehavior (freeze
 -- state + scenario/movement) purely to keep SpawnPed readable.
 local function ApplyBaseFlags(ped, data)
@@ -610,23 +597,23 @@ local function AttachBartenderTarget(ped)
     if GetResourceState('rr-bartender') ~= 'started' then
         if not BartenderWarned then
             BartenderWarned = true
-            print('^3[qb-pedplacer]^0 Bartender ped placed but rr-bartender is not started — drink ordering disabled until it is.')
+            print('^3[qb-pedplacer]^0 Bartender ped placed but rr-bartender is not started - drink ordering disabled until it is.')
         end
         return
     end
     exports['rr-bartender']:AddBartenderTarget(ped)
 end
 
---- Pin a ped at its placed coords until the map underneath it has streamed in,
---- then hand it back to gravity.
----
---- Peds spawn at Config.RenderDistance (100m), and at that range the collision
---- under the spawn point is not always loaded yet — an offshore island is the
---- worst case, because the only thing loaded out there is open sea. An unfrozen
---- ped dropped into that gap falls through, lands in the water and swims away.
---- Its handle stays perfectly valid, so StreamPeds still believes the ped is
---- alive and never rebuilds it: the party is simply gone until the resource is
---- restarted. Holding the ped still until collision exists removes the fall.
+-- Pin a ped at its placed coords until the map underneath it has streamed in
+-- then hand it back to gravity.
+--
+-- Peds spawn at Config.RenderDistance (100m), and at that range the collision
+-- under the spawn point is not always loaded yet, an offshore island is the
+-- worst case, because the only thing loaded out there is open sea. An unfrozen
+-- ped dropped into that gap falls through, lands in the water and swims away.
+-- Its handle stays perfectly valid, so StreamPeds still believes the ped is
+-- alive and never rebuilds it: the party is simply gone until the resource is
+-- restarted. Holding the ped still until collision exists removes the fall.
 local function HoldUntilGrounded(ped, data)
     CreateThread(function()
         local waited = 0
@@ -641,7 +628,7 @@ local function HoldUntilGrounded(ped, data)
         if not DoesEntityExist(ped) then return end
         -- Re-assert the row before releasing: whatever nudged the ped while it
         -- was pinned (a scenario enter anim, an MLO popping in) must not become
-        -- the position it falls from. Seated scenarios are left alone — the game
+        -- the position it falls from. Seated scenarios are left alone, the game
         -- settles those at its own offset from the row and StartSeatLoop owns it.
         if not IsSeatedScenario(data, data.anim_dict or data.animDict or '') then
             local c = GetEntityCoords(ped)
@@ -662,8 +649,8 @@ local function StartBehavior(ped, data)
     local behavior = data.behavior or 'idle'
 
     -- Only freeze idle peds. Scenario/wander/patrol/interact/bartender peds must
-    -- be unfrozen so gravity settles them and prop-based scenarios attach — but
-    -- only once there is ground under them to settle ONTO, so the unfreeze is
+    -- be unfrozen so gravity settles them and prop-based scenarios attach, but
+    -- only once there is ground under them to settle onto, so the unfreeze is
     -- deferred until collision has loaded (see HoldUntilGrounded).
     if behavior == 'idle' then
         local frozen = data.frozen
@@ -690,7 +677,7 @@ local function StartBehavior(ped, data)
 
             if data.scenario:find('SEAT') then
                 -- Seated: StartSeatLoop applies the scenario and keeps the ped
-                -- in the chair. It owns both position and heading — see the
+                -- in the chair. It owns both position and heading, see the
                 -- comment on StartSeatLoop for why this must not be re-headed.
                 StartSeatLoop(dbId, ped, data.scenario, PedAnchor(data))
             else
@@ -707,13 +694,13 @@ local function StartBehavior(ped, data)
         TaskStartScenarioInPlace(ped, barScenario, 0, true)
     end
 
-    -- Re-assert the placed heading AFTER the task has started. ApplyBaseFlags set
+    -- Re-assert the placed heading after the task has started. ApplyBaseFlags set
     -- it before we ran, but ClearPedTasksImmediately and the scenario's enter anim
     -- both turn the ped, so the heading applied at creation is not the one it ends
-    -- up holding — that's why a ped can spawn facing the wrong way even though the
+    -- up holding, that's why a ped can spawn facing the wrong way even though the
     -- database row is correct. Stationary behaviors only; wander/patrol are meant
     -- to turn. Two passes: once the enter anim is under way, once after it settles.
-    -- SEATED scenario peds are excluded: TaskStartScenarioAtPosition already set
+    -- seated scenario peds are excluded: TaskStartScenarioAtPosition already set
     -- their pose, and forcing the row's heading on top of it rotates the ped out
     -- of the chair (see StartSeatLoop). StartSeatLoop maintains those instead.
     if (behavior == 'idle' or behavior == 'scenario' or behavior == 'bartender')
@@ -728,7 +715,7 @@ local function StartBehavior(ped, data)
         end
     end
 
-    -- Block fleeing/reaction events AFTER the scenario task has started, so the
+    -- Block fleeing/reaction events after the scenario task has started, so the
     -- scenario's internal prop-spawn event isn't suppressed.
     if Config.BlockEvents and (behavior == 'idle' or behavior == 'scenario' or behavior == 'bartender') then
         Citizen.SetTimeout(500, function()
@@ -769,19 +756,19 @@ local function SpawnPed(data)
 
     -- Reject invalid models up front. The streaming loop calls SpawnPed every
     -- Config.StreamCheckInterval while the player is in range, so without this an
-    -- invalid model would print "Failed to load" every cycle forever. Log once,
+    -- invalid model would print "Failed to load" every cycle forever. Log once
     -- flag the ped, and never retry it this session.
     local modelHash = type(data.model) == 'number' and data.model or joaat(data.model)
     if not IsModelValid(modelHash) then
         FailedPeds[data.id] = true
-        print(('^1[qb-pedplacer]^0 Invalid model "%s" for ped #%s — skipping (fix or delete it via /%s)')
+        print(('^1[qb-pedplacer]^0 Invalid model "%s" for ped #%s - skipping (fix or delete it via /%s)')
             :format(tostring(data.model), tostring(data.id), Config.Command))
         return
     end
 
     local hash = LoadModel(data.model)
     if not hash then
-        -- Transient load failure (e.g. streaming pressure). Don't flag/spam —
+        -- Transient load failure (e.g. streaming pressure). Don't flag/spam
         -- the next streaming pass will retry the (valid) model.
         return
     end
@@ -797,8 +784,8 @@ local function SpawnPed(data)
     ApplyAddonPedVariation(ped, data.model)
     SetEntityAsMissionEntity(ped, true, true)
 
-    -- Place ped at exact stored coordinates — the Z is already correct from when it was saved.
-    -- DO NOT use PlaceObjectOnGroundProperly here: it snaps to outdoor terrain under MLO floors.
+    -- Place ped at exact stored coordinates, the Z is already correct from when it was saved.
+    -- DO not use PlaceObjectOnGroundProperly here: it snaps to outdoor terrain under MLO floors.
     SetEntityCoords(ped, data.x, data.y, data.z, false, false, false, false)
 
     ApplyBaseFlags(ped, data)
@@ -810,7 +797,7 @@ local function SpawnPed(data)
 
     SpawnedPeds[data.id] = { handle = ped, data = data, props = props }
 
-    -- Home Control: if this ped streams in while its home is partying,
+    -- Home Control: if this ped streams in while its home is partying
     -- swap the placed behavior for a dance loop.
     local pa = PedPartyArea(data)
     if pa and pa.mode == 'party' then
@@ -851,12 +838,10 @@ local function DespawnAllPeds()
     HeldPeds = {}
 end
 
--- ═══════════════════════════════════════════════════════════
---  STREAMING
--- ═══════════════════════════════════════════════════════════
+-- streaming
 
 -- Behaviors whose ped is meant to stay on its placed spot, so leaving that spot
--- means something went wrong. wander/patrol/interact are excluded — moving is
+-- means something went wrong. wander/patrol/interact are excluded, moving is
 -- their whole job.
 local StationaryBehavior = { idle = true, scenario = true, bartender = true }
 
@@ -866,7 +851,7 @@ local function StreamPeds()
         local entry = SpawnedPeds[data.id]
 
         -- The engine can quietly cull a ped (interior transitions, ped-pool
-        -- pressure, MLO load) while our table still believes it's alive — that's
+        -- pressure, MLO load) while our table still believes it's alive, that's
         -- the classic "peds vanished, had to restart the resource" bug. Detect
         -- the dead handle and clear it so the logic below recreates the ped.
         if entry and not DoesEntityExist(entry.handle) then
@@ -900,7 +885,7 @@ local function StreamPeds()
             end
         end
 
-        -- Home Control: guests sent home → never respawn, and cull any
+        -- Home Control: guests sent home -> never respawn, and cull any
         -- straggler once the walk-out grace period has passed.
         local pa = PedPartyArea(data)
         if pa and pa.mode == 'away' then
@@ -909,7 +894,7 @@ local function StreamPeds()
         end
 
         -- A ped that is supposed to stand still has left its spot. The engine
-        -- doesn't tell us — the handle is still valid — so without this the ped
+        -- doesn't tell us, the handle is still valid, so without this the ped
         -- is "gone" for the rest of the session no matter how many times you
         -- walk back: the streamer sees a live entry and skips it. Snap small
         -- strays back, and rebuild anything that has fallen through the world or
@@ -934,7 +919,7 @@ local function StreamPeds()
                     entry = nil
                 elseif tries == 3 then
                     HealTries[data.id] = 4
-                    print(('^3[qb-pedplacer]^0 Ped #%s will not stay on its placed spot (row z may be wrong) — leaving it alone. Re-place it with /%s.')
+                    print(('^3[qb-pedplacer]^0 Ped #%s will not stay on its placed spot (row z may be wrong) - leaving it alone. Re-place it with /%s.')
                         :format(tostring(data.id), Config.Command))
                 end
             elseif stray > 3.0 and not IsSeatedScenario(data, data.anim_dict or data.animDict or '') then
@@ -954,10 +939,10 @@ local function StreamPeds()
         local near = dist <= Config.RenderDistance
 
         if Config.PermanentPeds then
-            -- Permanent: spawn the FIRST time you come within range (so the ped
+            -- Permanent: spawn the first time you come within range (so the ped
             -- is created where the world/collision is loaded, never in an
-            -- unstreamed area), then keep it loaded forever — it is never
-            -- despawned by distance. Combined with the cull-detection above,
+            -- unstreamed area), then keep it loaded forever, it is never
+            -- despawned by distance. Combined with the cull-detection above
             -- this means once you've been to an MLO its peds stay put and
             -- self-heal if the engine ever removes them, with no resource reset.
             if near and not entry then
@@ -976,9 +961,7 @@ local function StreamPeds()
     end
 end
 
--- ═══════════════════════════════════════════════════════════
---  RADIO SPAWNING (speaker prop only — audio via mobile radio zone)
--- ═══════════════════════════════════════════════════════════
+--  radio spawning (speaker prop only, audio via mobile radio zone)
 
 local activeRadioZone = nil   -- db id of the radio zone the player is currently inside
 
@@ -1055,7 +1038,7 @@ local function StreamRadios()
     end
 end
 
--- Radio zone loop — plays GTA radio when player is near a speaker
+-- Radio zone loop, plays GTA radio when player is near a speaker
 -- Uses mobile phone radio (same system GTA uses for strip club / nightclub)
 CreateThread(function()
     while true do
@@ -1114,22 +1097,20 @@ CreateThread(function()
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
---  METAL DETECTOR SPAWNING + SCAN
+--  metal detector spawning + scan
 --  Mirrors the radio pattern: stream the archway prop by distance, and
---  scan the LOCAL player — if they walk through armed, fire the alarm.
+--  scan the local player, if they walk through armed, fire the alarm.
 --  The prop model + beep both come from the "metal-detectors" resource:
 --  the beep is broadcast through its shared `DetectorAlarm` event so other
 --  nearby players hear it too. A local beep is used as a fallback if that
 --  resource is stopped.
--- ═══════════════════════════════════════════════════════════
 
 local function SpawnDetector(data)
     if SpawnedDetectors[data.id] then return end
 
     local propHash = LoadModel(Config.MetalDetector.model)
     if not propHash then
-        print('^1[qb-pedplacer]^0 Failed to load metal-detector prop (' .. tostring(Config.MetalDetector.model) .. ') — is the metal-detectors resource started?')
+        print('^1[qb-pedplacer]^0 Failed to load metal-detector prop (' .. tostring(Config.MetalDetector.model) .. ') - is the metal-detectors resource started?')
         return
     end
 
@@ -1194,7 +1175,7 @@ local function DetectorBeepLocal(x, y, z, range)
     end)
 end
 
--- Scan loop — fires the alarm once each time the local (armed) player enters
+-- Scan loop, fires the alarm once each time the local (armed) player enters
 -- a detector's radius. Flag 7 = melee | gun | thrown weapons.
 CreateThread(function()
     while true do
@@ -1237,9 +1218,7 @@ CreateThread(function()
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
---  INITIAL LOAD
--- ═══════════════════════════════════════════════════════════
+-- initial load
 
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function() isLoggedIn = true end)
 AddEventHandler('QBCore:Client:OnPlayerLoaded', function() isLoggedIn = true end)
@@ -1252,15 +1231,15 @@ RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
     AllRadioData = {}
     AllDetectorData = {}
     -- Everything above is now empty, so the streaming loop must refetch on the
-    -- next character load — otherwise it streams nothing forever.
+    -- next character load, otherwise it streams nothing forever.
     PlacerDataLoaded = false
 end)
 
---- Pull every placed row (plus current hidden state) from the server.
---- Run on first spawn AND again after every character load: OnPlayerUnload above
---- empties the local tables, so without a refetch a relog or a multicharacter
---- switch left the client with nothing to stream and the peds only came back if
---- you restarted the resource.
+-- Pull every placed row (plus current hidden state) from the server.
+-- Run on first spawn and again after every character load: OnPlayerUnload above
+-- empties the local tables, so without a refetch a relog or a multicharacter
+-- switch left the client with nothing to stream and the peds only came back if
+-- you restarted the resource.
 local function LoadPlacerData()
     AllPedData = lib.callback.await('qb-pedplacer:server:getPeds', false) or {}
     AllRadioData = lib.callback.await('qb-pedplacer:server:getRadios', false) or {}
@@ -1312,9 +1291,7 @@ CreateThread(function()
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
---  NET EVENTS
--- ═══════════════════════════════════════════════════════════
+-- net events
 
 RegisterNetEvent('qb-pedplacer:client:spawnPed', function(data)
     table.insert(AllPedData, data)
@@ -1358,13 +1335,11 @@ RegisterNetEvent('qb-pedplacer:client:setAreaHidden', function(key, area)
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
---  HOME CONTROL BRIDGE EVENTS (rr-homecontrol)
--- ═══════════════════════════════════════════════════════════
+--  home control bridge events (rr-homecontrol)
 
 -- Drive every placed ped in an area. `mode`:
---   'party' → dance loops (area.anims), 'chill' → restore placed behavior,
---   'away'  → walk to area.exit, then stay despawned until mode changes.
+--   'party' -> dance loops (area.anims), 'chill' -> restore placed behavior
+--   'away'  -> walk to area.exit, then stay despawned until mode changes.
 RegisterNetEvent('qb-pedplacer:client:homecontrolGuests', function(key, area, mode)
     if not key or not area then return end
     local prev = PartyAreas[key]
@@ -1444,9 +1419,7 @@ RegisterNetEvent('qb-pedplacer:client:updatePedPosition', function(pedId, x, y, 
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
---  RADIO NET EVENTS
--- ═══════════════════════════════════════════════════════════
+-- radio net events
 
 RegisterNetEvent('qb-pedplacer:client:spawnRadio', function(data)
     AllRadioData[#AllRadioData + 1] = data
@@ -1463,9 +1436,7 @@ RegisterNetEvent('qb-pedplacer:client:despawnRadio', function(radioId)
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
---  METAL DETECTOR NET EVENTS
--- ═══════════════════════════════════════════════════════════
+-- metal detector net events
 
 RegisterNetEvent('qb-pedplacer:client:spawnDetector', function(data)
     AllDetectorData[#AllDetectorData + 1] = data
@@ -1503,9 +1474,7 @@ RegisterNetEvent('qb-pedplacer:client:updatePatrolPoints', function(pedId, point
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
---  PLACEMENT MODE
--- ═══════════════════════════════════════════════════════════
+-- placement mode
 
 local function StartPlacement(modelName, label, scenario, weapon, invincible, frozen, behavior, wanderRadius, interactType, groupName, animDict, animName, emoteProps, startHeading)
     local hash = LoadModel(modelName)
@@ -1584,13 +1553,11 @@ local function StartPlacement(modelName, label, scenario, weapon, invincible, fr
     end)
 end
 
--- ═══════════════════════════════════════════════════════════
---  CASINO DEALER (BLACKJACK) PLACEMENT
+--  casino dealer (blackjack) placement
 --  Place the dealer AT an existing blackjack table -> snaps to that table's
---  exact origin (so cards/chips line up) and registers a PLAYABLE dealer with
+--  exact origin (so cards/chips line up) and registers a playable dealer with
 --  the casino engine via rr-casino-placer. No table within range -> falls back
 --  to a normal decorative dealer ped placed through qb-pedplacer.
--- ═══════════════════════════════════════════════════════════
 local function FindNearestCasinoTable(coords)
     local best, bestDist = 0, math.huge
     for _, name in ipairs(Config.CasinoTableModels) do
@@ -1643,7 +1610,7 @@ local function StartCasinoDealerPlacement(highStakes, modelName, label, groupNam
 
             local nearTable = FindNearestCasinoTable(GetEntityCoords(PreviewPed)) ~= nil
             DrawText3D(hitCoords.x, hitCoords.y, hitCoords.z + 1.2,
-                (nearTable and '~g~At a table — PLAYABLE~w~' or '~o~No table near — decorative~w~') ..
+                (nearTable and '~g~At a table - PLAYABLE~w~' or '~o~No table near - decorative~w~') ..
                 '\n~g~RMB~w~ Place  |  ~y~Scroll~w~ Rotate  |  ~r~LMB~w~ Cancel')
 
             if IsControlPressed(0, 241) then heading = heading + 3.0 if heading > 360.0 then heading = heading - 360.0 end end
@@ -1657,17 +1624,17 @@ local function StartCasinoDealerPlacement(highStakes, modelName, label, groupNam
 
                 local t = FindNearestCasinoTable(finalCoords)
                 if t and GetResourceState(Config.CasinoPlacer) == 'started' then
-                    -- PLAYABLE: snap to the table origin and register with the casino engine
+                    -- playable: snap to the table origin and register with the casino engine
                     TriggerServerEvent('rr-casino-placer:save', {
                         x = t.x, y = t.y, z = t.z, w = t.w, highStakes = highStakes,
                     })
-                    lib.notify({ title = 'Casino Dealer', description = 'Snapped to the table — playable dealer registered. The casino engine will respawn dealers.', type = 'success', duration = 8000 })
+                    lib.notify({ title = 'Casino Dealer', description = 'Snapped to the table - playable dealer registered. The casino engine will respawn dealers.', type = 'success', duration = 8000 })
                 else
-                    -- DECORATIVE fallback: a standing dealer ped via qb-pedplacer
+                    -- decorative fallback: a standing dealer ped via qb-pedplacer
                     if t then
-                        lib.notify({ title = 'Casino Dealer', description = Config.CasinoPlacer .. ' is not running — placed a decorative dealer instead.', type = 'warning', duration = 9000 })
+                        lib.notify({ title = 'Casino Dealer', description = Config.CasinoPlacer .. ' is not running - placed a decorative dealer instead.', type = 'warning', duration = 9000 })
                     else
-                        lib.notify({ title = 'Casino Dealer', description = 'No blackjack table within range — placed a decorative dealer.', type = 'warning', duration = 9000 })
+                        lib.notify({ title = 'Casino Dealer', description = 'No blackjack table within range - placed a decorative dealer.', type = 'warning', duration = 9000 })
                     end
                     TriggerServerEvent('qb-pedplacer:server:placePed', {
                         model        = model,
@@ -1698,9 +1665,7 @@ local function StartCasinoDealerPlacement(highStakes, modelName, label, groupNam
     end)
 end
 
--- ═══════════════════════════════════════════════════════════
---  PATROL POINT RECORDING MODE
--- ═══════════════════════════════════════════════════════════
+-- patrol point recording mode
 
 local function RecordPatrolPoints(pedId)
     local points = {}
@@ -1746,11 +1711,9 @@ local function RecordPatrolPoints(pedId)
     end)
 end
 
--- ═══════════════════════════════════════════════════════════
---  MENU SYSTEM
--- ═══════════════════════════════════════════════════════════
+-- menu system
 
--- BEHAVIOR SELECTION MENU
+-- behavior selection menu
 local function OpenBehaviorMenu(modelName, label, weapon, invincible, frozen, groupName)
     local options = {}
 
@@ -1763,7 +1726,7 @@ local function OpenBehaviorMenu(modelName, label, weapon, invincible, frozen, gr
         end,
     }
 
-    -- Scenario — shows scenario submenu
+    -- Scenario, shows scenario submenu
     options[#options + 1] = {
         title = '🎬 Play Scenario',
         description = 'Choose an animation for the ped to loop',
@@ -1885,26 +1848,26 @@ local function OpenBehaviorMenu(modelName, label, weapon, invincible, frozen, gr
         end,
     }
 
-    -- Bartender — serves drinks via rr-bartender (order over the bar)
+    -- Bartender, serves drinks via rr-bartender (order over the bar)
     options[#options + 1] = {
         title = '🍸 Bartender (Serves Drinks)',
-        description = 'Players can walk up and order a drink — served over the bar',
+        description = 'Players can walk up and order a drink - served over the bar',
         onSelect = function()
             StartPlacement(modelName, label, 'WORLD_HUMAN_STAND_IMPATIENT', weapon, invincible, false, 'bartender', nil, nil, groupName)
         end,
     }
 
-    -- Casino Dealer — playable blackjack when placed at a table (via rr-casino-placer)
+    -- Casino Dealer, playable blackjack when placed at a table (via rr-casino-placer)
     options[#options + 1] = {
-        title = '🎰 Casino Dealer — Standard',
-        description = 'Place AT a blackjack table → playable (cash bets up to $50k). No table = decorative.',
+        title = '🎰 Casino Dealer - Standard',
+        description = 'Place AT a blackjack table -> playable (cash bets up to $50k). No table = decorative.',
         onSelect = function()
             StartCasinoDealerPlacement(false, modelName, label, groupName)
         end,
     }
     options[#options + 1] = {
-        title = '🎰 Casino Dealer — High-Limit',
-        description = 'Place AT a blackjack table → playable high-stakes. No table = decorative.',
+        title = '🎰 Casino Dealer - High-Limit',
+        description = 'Place AT a blackjack table -> playable high-stakes. No table = decorative.',
         onSelect = function()
             StartCasinoDealerPlacement(true, modelName, label, groupName)
         end,
@@ -1914,14 +1877,12 @@ local function OpenBehaviorMenu(modelName, label, weapon, invincible, frozen, gr
     lib.showContext('pedplacer_behavior')
 end
 
--- ═══════════════════════════════════════════════════════════
---  EMOTE MENU (scully_emotemenu bridge)
--- ═══════════════════════════════════════════════════════════
+--  emote menu (scully_emotemenu bridge)
 local EMOTE_BROWSE_CAP = 100   -- max emotes listed when browsing a category (use search for the rest)
 local EMOTE_SEARCH_CAP = 200   -- max search results shown at once
 
---- Resolve a scully emote and hand it to the normal placement flow as a looping
---- scenario (with any held props threaded through to the ped).
+-- Resolve a scully emote and hand it to the normal placement flow as a looping
+-- scenario (with any held props threaded through to the ped).
 local function PlaceEmote(modelName, label, weapon, invincible, frozen, groupName, emote)
     local dict, anim, props = ResolveEmote(emote)
     if not dict or not anim or dict == '' or anim == '' then
@@ -1929,12 +1890,12 @@ local function PlaceEmote(modelName, label, weapon, invincible, frozen, groupNam
         return
     end
     -- Only carry/store props for emotes that actually need them; propless
-    -- emotes (most dances, leaning, etc.) save nothing (DB stays NULL).
+    -- emotes (most dances, leaning, etc.) save nothing (DB stays null).
     if not props or #props == 0 then props = nil end
     StartPlacement(modelName, label, '', weapon, invincible, frozen, 'scenario', nil, nil, groupName, dict, anim, props)
 end
 
---- Build one context-menu row for an emote.
+-- Build one context-menu row for an emote.
 local function EmoteOption(modelName, label, weapon, invincible, frozen, groupName, e, categoryName)
     local hasProps = e.Options and e.Options.Props and #e.Options.Props > 0
     local desc = ('/e %s'):format(e.Command or '?')
@@ -1947,10 +1908,10 @@ local function EmoteOption(modelName, label, weapon, invincible, frozen, groupNa
     }
 end
 
---- Search emotes by label/command. `cat` nil = search every category.
+-- Search emotes by label/command. `cat` nil = search every category.
 function OpenEmoteSearch(modelName, label, weapon, invincible, frozen, groupName, cat)
     local input = lib.inputDialog('Search Emotes', {
-        { type = 'input', label = 'Search', description = 'Name or command — e.g. "smoke", "lean", "beer"', required = true },
+        { type = 'input', label = 'Search', description = 'Name or command - e.g. "smoke", "lean", "beer"', required = true },
     })
     if not input or not input[1] then return end
 
@@ -1984,7 +1945,7 @@ function OpenEmoteSearch(modelName, label, weapon, invincible, frozen, groupName
     lib.showContext('pedplacer_emote_search')
 end
 
---- Browse a single emote category (capped; leads with a scoped search).
+-- Browse a single emote category (capped; leads with a scoped search).
 function OpenEmoteCategory(modelName, label, weapon, invincible, frozen, groupName, cat)
     local options = {
         { title = '🔍 Search ' .. cat.name, description = 'Filter this category', onSelect = function()
@@ -2001,17 +1962,17 @@ function OpenEmoteCategory(modelName, label, weapon, invincible, frozen, groupNa
         end
     end
     if shown > EMOTE_BROWSE_CAP then
-        options[#options + 1] = { title = '… more not shown — use Search above', disabled = true }
+        options[#options + 1] = { title = '… more not shown - use Search above', disabled = true }
     end
 
     lib.registerContext({ id = 'pedplacer_emote_cat', title = cat.icon .. ' ' .. cat.name, menu = 'pedplacer_emote_root', options = options })
     lib.showContext('pedplacer_emote_cat')
 end
 
---- Root of the emote branch: search, exact-command, and per-category browse.
+-- Root of the emote branch: search, exact-command, and per-category browse.
 function OpenEmoteRootMenu(modelName, label, weapon, invincible, frozen, groupName)
     if not LoadEmoteLibrary() then
-        lib.notify({ title = 'Ped Placer', description = EMOTE_RESOURCE .. ' is not started — emote library unavailable.', type = 'error', duration = 8000 })
+        lib.notify({ title = 'Ped Placer', description = EMOTE_RESOURCE .. ' is not started - emote library unavailable.', type = 'error', duration = 8000 })
         return
     end
 
@@ -2023,7 +1984,7 @@ function OpenEmoteRootMenu(modelName, label, weapon, invincible, frozen, groupNa
         },
         {
             title = '⌨️ Enter Exact Command',
-            description = 'Straight from /e — e.g. dance3, beer, cigar, lean',
+            description = 'Straight from /e - e.g. dance3, beer, cigar, lean',
             onSelect = function()
                 local input = lib.inputDialog('Emote Command', {
                     { type = 'input', label = 'Command', description = 'The /e command, e.g. "lean"', required = true },
@@ -2053,10 +2014,10 @@ function OpenEmoteRootMenu(modelName, label, weapon, invincible, frozen, groupNa
     lib.showContext('pedplacer_emote_root')
 end
 
--- SCENARIO MENU
+-- scenario menu
 function OpenScenarioMenu(modelName, label, weapon, invincible, frozen, groupName)
     local options = {}
-    -- Emote Menu (scully) bridge — full animation / dance / prop-emote library
+    -- Emote Menu (scully) bridge, full animation / dance / prop-emote library
     if EmotesAvailable() then
         options[#options + 1] = {
             title = '🕺 Emote Menu (Scully)…',
@@ -2079,7 +2040,7 @@ function OpenScenarioMenu(modelName, label, weapon, invincible, frozen, groupNam
     lib.showContext('pedplacer_scenario')
 end
 
--- WEAPON MENU
+-- weapon menu
 local function OpenWeaponMenu(modelName, label, invincible, frozen, groupName)
     local options = {}
     for _, w in ipairs(Config.Weapons) do
@@ -2094,7 +2055,7 @@ local function OpenWeaponMenu(modelName, label, invincible, frozen, groupName)
     lib.showContext('pedplacer_weapon')
 end
 
--- SETTINGS MENU
+-- settings menu
 local function OpenSettingsMenu(modelName, label, groupName)
     lib.registerContext({
         id = 'pedplacer_settings',
@@ -2110,7 +2071,7 @@ local function OpenSettingsMenu(modelName, label, groupName)
     lib.showContext('pedplacer_settings')
 end
 
--- MODEL SELECT
+-- model select
 local function OpenPresetModels(category)
     local options = {}
     for _, m in ipairs(category.models) do
@@ -2138,7 +2099,7 @@ local function OpenCustomModelInput()
     OpenSettingsMenu(modelName, label)
 end
 
--- PLACE MENU
+-- place menu
 local function OpenPlaceMenu()
     local options = {}
     for _, cat in ipairs(Config.Presets) do
@@ -2155,9 +2116,7 @@ local function OpenPlaceMenu()
     lib.showContext('pedplacer_place')
 end
 
--- ═══════════════════════════════════════════════════════════
---  MANAGE / ACTIONS MENUS
--- ═══════════════════════════════════════════════════════════
+-- manage / actions menus
 
 function OpenPedActionsMenu(data)
     local actionOptions = {
@@ -2193,7 +2152,7 @@ function OpenPedActionsMenu(data)
         end,
     }
 
-    lib.registerContext({ id = 'pedplacer_actions', title = '#' .. data.id .. ' — ' .. (data.label or data.model), menu = 'pedplacer_manage', options = actionOptions })
+    lib.registerContext({ id = 'pedplacer_actions', title = '#' .. data.id .. ' - ' .. (data.label or data.model), menu = 'pedplacer_manage', options = actionOptions })
     lib.showContext('pedplacer_actions')
 end
 
@@ -2206,7 +2165,7 @@ local function OpenManageMenu()
             local dist = #(GetEntityCoords(PlayerPedId()) - vector3(data.x, data.y, data.z))
             local beh = data.behavior or 'idle'
             options[#options + 1] = {
-                title = string.format('#%d — %s', data.id, data.label or data.model),
+                title = string.format('#%d - %s', data.id, data.label or data.model),
                 description = string.format('%s | %s | %.0fm', data.model, beh, dist),
                 onSelect = function() OpenPedActionsMenu(data) end,
             }
@@ -2231,7 +2190,7 @@ local function OpenNearbyMenu()
     else
         for _, entry in ipairs(nearby) do
             options[#options + 1] = {
-                title = string.format('#%d — %s (%.1fm)', entry.data.id, entry.data.label or entry.data.model, entry.dist),
+                title = string.format('#%d - %s (%.1fm)', entry.data.id, entry.data.label or entry.data.model, entry.dist),
                 onSelect = function() OpenPedActionsMenu(entry.data) end,
             }
         end
@@ -2240,13 +2199,11 @@ local function OpenNearbyMenu()
     lib.showContext('pedplacer_nearby')
 end
 
--- ═══════════════════════════════════════════════════════════
---  GROUP MENUS
--- ═══════════════════════════════════════════════════════════
+-- group menus
 
---- Place a preset group at your location
---- Get the correct ground Z at a world position (works on MLO floors, Cayo, terrain)
---- Probes CLOSE first so we find the MLO floor we're on, not outdoor terrain above/below.
+-- Place a preset group at your location
+-- Get the correct ground Z at a world position (works on MLO floors, Cayo, terrain)
+-- Probes close first so we find the MLO floor we're on, not outdoor terrain above/below.
 local function GetGroundZ(x, y, z)
     -- Request collision so MLO/interior geometry is loaded at the target
     RequestCollisionAtCoord(x, y, z)
@@ -2256,7 +2213,7 @@ local function GetGroundZ(x, y, z)
         waited = waited + 10
     end
 
-    -- Raycast: tight range first (best for MLO floors — won't escape through ceiling)
+    -- Raycast: tight range first (best for MLO floors, won't escape through ceiling)
     local ray1 = StartShapeTestRay(x, y, z + 3.0, x, y, z - 3.0, 1 + 16, PlayerPedId(), 0)
     local _, hit1, hitCoords1 = GetShapeTestResult(ray1)
     if hit1 == 1 and math.abs(hitCoords1.z - z) < 4.0 then
@@ -2305,7 +2262,7 @@ local function PlacePresetGroup(group)
         local finalY = baseCoords.y + rotY
         local finalZ = GetGroundZ(finalX, finalY, baseCoords.z + (pedDef.offsetZ or 0.0))
 
-        -- A preset ped may opt out of the defaults: gang houses place MORTAL
+        -- A preset ped may opt out of the defaults: gang houses place mortal
         -- peds (rr-gangwar fights them), everything else keeps the old
         -- invincible + frozen-when-stationary behaviour.
         local invincible = pedDef.invincible
@@ -2333,7 +2290,7 @@ local function PlacePresetGroup(group)
     end
 end
 
---- Place a saved custom group
+-- Place a saved custom group
 local function PlaceSavedGroup(groupData)
     local baseCoords = GetEntityCoords(PlayerPedId())
     local baseHeading = GetEntityHeading(PlayerPedId())
@@ -2378,7 +2335,7 @@ local function PlaceSavedGroup(groupData)
     end
 end
 
---- Save nearby peds as a custom group
+-- Save nearby peds as a custom group
 local function SaveNearbyAsGroup()
     local input = lib.inputDialog('Save Group', {
         { type = 'input', label = 'Group Name', required = true },
@@ -2409,7 +2366,7 @@ local function SaveNearbyAsGroup()
                 behavior      = data.behavior or 'idle',
                 wander_radius = data.wander_radius or Config.DefaultWanderRadius,
                 interact_type = data.interact_type or '',
-                -- Preserve anim-based scenarios (drug/stripper) AND emote peds
+                -- Preserve anim-based scenarios (drug/stripper) and emote peds
                 anim_dict     = data.anim_dict or '',
                 anim_name     = data.anim_name or '',
                 emote_props   = data.emote_props,
@@ -2507,13 +2464,9 @@ local function OpenGroupMenu()
     lib.showContext('pedplacer_groups')
 end
 
--- ═══════════════════════════════════════════════════════════
---  MAIN MENU
--- ═══════════════════════════════════════════════════════════
+-- main menu
 
--- ═══════════════════════════════════════════════════════════
---  RADIO PLACEMENT
--- ═══════════════════════════════════════════════════════════
+-- radio placement
 
 local function StartRadioPlacement(speakerModel, speakerLabel, station, stationLabel)
     local hash = LoadModel(speakerModel)
@@ -2562,7 +2515,7 @@ local function StartRadioPlacement(speakerModel, speakerLabel, station, stationL
                     y       = finalCoords.y,
                     z       = finalCoords.z,
                     heading = heading,
-                    label   = speakerLabel .. ' — ' .. stationLabel,
+                    label   = speakerLabel .. ' - ' .. stationLabel,
                 })
                 break
             end
@@ -2577,9 +2530,7 @@ local function StartRadioPlacement(speakerModel, speakerLabel, station, stationL
     end)
 end
 
--- ═══════════════════════════════════════════════════════════
---  RADIO MENUS
--- ═══════════════════════════════════════════════════════════
+-- radio menus
 
 local function OpenRadioStationMenu(speakerModel, speakerLabel)
     local options = {}
@@ -2620,7 +2571,7 @@ local function OpenRadioManageMenu()
         for _, data in ipairs(AllRadioData) do
             local dist = #(playerCoords - vector3(data.x, data.y, data.z))
             options[#options + 1] = {
-                title = '#' .. data.id .. ' — ' .. (data.label or data.model),
+                title = '#' .. data.id .. ' - ' .. (data.label or data.model),
                 description = string.format('%.0fm away | %s', dist, data.station),
                 onSelect = function()
                     local confirm = lib.alertDialog({
@@ -2652,9 +2603,7 @@ local function OpenRadioMenu()
     lib.showContext('pedplacer_radio')
 end
 
--- ═══════════════════════════════════════════════════════════
---  METAL DETECTOR PLACEMENT
--- ═══════════════════════════════════════════════════════════
+-- metal detector placement
 
 local function StartDetectorPlacement()
     local hash = LoadModel(Config.MetalDetector.model)
@@ -2717,9 +2666,7 @@ local function StartDetectorPlacement()
     end)
 end
 
--- ═══════════════════════════════════════════════════════════
---  METAL DETECTOR MENUS
--- ═══════════════════════════════════════════════════════════
+-- metal detector menus
 
 local function OpenDetectorManageMenu()
     local options = {}
@@ -2730,7 +2677,7 @@ local function OpenDetectorManageMenu()
         for _, data in ipairs(AllDetectorData) do
             local dist = #(playerCoords - vector3(data.x, data.y, data.z))
             options[#options + 1] = {
-                title = '#' .. data.id .. ' — ' .. (data.label or 'Metal Detector'),
+                title = '#' .. data.id .. ' - ' .. (data.label or 'Metal Detector'),
                 description = string.format('%.0fm away | radius %.1fm', dist, data.radius or Config.MetalDetector.radius),
                 onSelect = function()
                     local confirm = lib.alertDialog({
@@ -2768,8 +2715,6 @@ local function OpenDetectorMenu()
     lib.showContext('pedplacer_detector')
 end
 
--- ═══════════════════════════════════════════════════════════
-
 local function OpenMainMenu()
     lib.registerContext({
         id = 'pedplacer_main',
@@ -2792,9 +2737,7 @@ local function OpenMainMenu()
     lib.showContext('pedplacer_main')
 end
 
--- ═══════════════════════════════════════════════════════════
---  EVENTS
--- ═══════════════════════════════════════════════════════════
+-- events
 
 RegisterNetEvent('qb-pedplacer:client:openMenu', function() OpenPlacerUI() end)
 
@@ -2806,13 +2749,11 @@ AddEventHandler('onResourceStop', function(resourceName)
     if PreviewPed and DoesEntityExist(PreviewPed) then DeletePed(PreviewPed) end
 end)
 
-print('^2[qb-pedplacer]^0 Client loaded (v2 — behaviors + groups)')
+print('^2[qb-pedplacer]^0 Client loaded (v2 - behaviors + groups)')
 
--- ═══════════════════════════════════════════════════════════
---  PUBLIC EXPORTS (for other resources to bind to placed peds)
--- ═══════════════════════════════════════════════════════════
+--  public exports (for other resources to bind to placed peds)
 
---- Returns the ped entity handle for a placed_peds row id, or 0 if not currently spawned/streamed.
+-- Returns the ped entity handle for a placed_peds row id, or 0 if not currently spawned/streamed.
 exports('GetPedHandle', function(dbId)
     local entry = SpawnedPeds[dbId]
     if entry and DoesEntityExist(entry.handle) then
@@ -2821,8 +2762,8 @@ exports('GetPedHandle', function(dbId)
     return 0
 end)
 
---- Returns an array of placed_peds rows whose group_name matches.
---- Each row is the same data row qb-pedplacer caches client-side.
+-- Returns an array of placed_peds rows whose group_name matches.
+-- Each row is the same data row qb-pedplacer caches client-side.
 exports('GetPedsByGroup', function(groupName)
     local out = {}
     for _, data in ipairs(AllPedData) do
@@ -2833,7 +2774,7 @@ exports('GetPedsByGroup', function(groupName)
     return out
 end)
 
---- Returns the cached row for a single placed_peds id (whether streamed or not).
+-- Returns the cached row for a single placed_peds id (whether streamed or not).
 exports('GetPedData', function(dbId)
     for _, data in ipairs(AllPedData) do
         if data.id == dbId then return data end
@@ -2841,20 +2782,20 @@ exports('GetPedData', function(dbId)
     return nil
 end)
 
---- rr-girlfriend bridge: hand a currently-spawned placed ped over to another
---- resource. Stops our behavior/anim threads, removes held emote props, drops
---- the tracking entry WITHOUT deleting the entity (the claimer keeps it), and
---- blocks this row from respawning until UnclaimPed. Returns the placed_peds
---- data row, or nil if the entity isn't one of ours.
---- Hand a placed ped over to another resource: stops its behaviour, drops it
---- from the streaming table so the loop cannot despawn it, claims the row so no
---- duplicate respawns, and unfreezes it.
----
---- Give it back with UnclaimPed(data.id) and the streaming loop puts it back on
---- its placed spot.
----
---- ReleasePedToGirlfriend is the original name, kept because rr-girlfriend
---- calls it; this is the same function for everyone else.
+-- rr-girlfriend bridge: hand a currently-spawned placed ped over to another
+-- resource. Stops our behavior/anim threads, removes held emote props, drops
+-- the tracking entry without deleting the entity (the claimer keeps it), and
+-- blocks this row from respawning until UnclaimPed. Returns the placed_peds
+-- data row, or nil if the entity isn't one of ours.
+-- Hand a placed ped over to another resource: stops its behaviour, drops it
+-- from the streaming table so the loop cannot despawn it, claims the row so no
+-- duplicate respawns, and unfreezes it.
+--
+-- Give it back with UnclaimPed(data.id) and the streaming loop puts it back on
+-- its placed spot.
+--
+-- ReleasePedToGirlfriend is the original name, kept because rr-girlfriend
+-- calls it; this is the same function for everyone else.
 local function ReleasePlacedPed(entity)
     for dbId, entry in pairs(SpawnedPeds) do
         if entry.handle == entity then
@@ -2877,25 +2818,25 @@ end
 exports('ReleasePlacedPed', ReleasePlacedPed)
 exports('ReleasePedToGirlfriend', ReleasePlacedPed)
 
---- Mark a placed ped row claimed by id (relog path — the claimer spawns its own
---- copy near the player, so despawn ours if it already streamed in).
+-- Mark a placed ped row claimed by id (relog path, the claimer spawns its own
+-- copy near the player, so despawn ours if it already streamed in).
 exports('ClaimPedById', function(dbId)
     if not dbId then return end
     ClaimedPeds[dbId] = true
     if SpawnedPeds[dbId] then DespawnPed(dbId) end
 end)
 
---- Release a claim; the streaming loop respawns the ped at its placed spot.
+-- Release a claim; the streaming loop respawns the ped at its placed spot.
 exports('UnclaimPed', function(dbId)
     if dbId then ClaimedPeds[dbId] = nil end
 end)
 
---- rr-gangwar bridge: let another resource drive a placed ped's FIGHT while
---- we keep owning the entity. HoldPed(id, true) stops the row's behaviour
---- thread and suspends the stray snap-back for that row; HoldPed(id, false)
---- hands it back and restarts the placed behaviour from wherever the ped now
---- stands (walk it home first, or the stray check will teleport it).
---- Returns true when the row is known to this client.
+-- rr-gangwar bridge: let another resource drive a placed ped's fight while
+-- we keep owning the entity. HoldPed(id, true) stops the row's behaviour
+-- thread and suspends the stray snap-back for that row; HoldPed(id, false)
+-- hands it back and restarts the placed behaviour from wherever the ped now
+-- stands (walk it home first, or the stray check will teleport it).
+-- Returns true when the row is known to this client.
 exports('HoldPed', function(dbId, held)
     if not dbId then return false end
     if held then
@@ -2916,9 +2857,9 @@ exports('IsPedHeld', function(dbId)
     return dbId ~= nil and HeldPeds[dbId] == true
 end)
 
---- Returns ped entity handles for every currently-spawned placed_peds row
---- that has a non-empty weapon assigned. rr-guardai uses this to identify
---- which placed peds are "guards" (armed) vs scenery (unarmed).
+-- Returns ped entity handles for every currently-spawned placed_peds row
+-- that has a non-empty weapon assigned. rr-guardai uses this to identify
+-- which placed peds are "guards" (armed) vs scenery (unarmed).
 exports('GetGuardPeds', function()
     local list = {}
     for _, entry in pairs(SpawnedPeds) do
@@ -2932,13 +2873,11 @@ exports('GetGuardPeds', function()
     return list
 end)
 
--- ═══════════════════════════════════════════════════════════
---  NUI — PED PLACER DASHBOARD (purple command-center shell)
+--  NUI, PED placer dashboard (purple command-center shell)
 --  The /pedplacer command now opens this. The old ox_lib menus are all still
 --  here and reachable from the sidebar ("Classic Menu" / Groups / Radios /
---  Metal Detectors), so nothing was removed — the NUI drives the exact same
+--  Metal Detectors), so nothing was removed, the NUI drives the exact same
 --  StartPlacement / casino / patrol / emote flows.
--- ═══════════════════════════════════════════════════════════
 local UIOpen = false
 
 local function ClosePlacerUI()
@@ -2966,7 +2905,7 @@ function OpenPlacerUI()
     })
 end
 
--- Patrol needs its own placement pass (place → then record waypoints), same as
+-- Patrol needs its own placement pass (place -> then record waypoints), same as
 -- the classic menu's patrol flow.
 local function StartPatrolPlacementNUI(modelName, label, weapon, invincible, speed, groupName, startHeading)
     local hash = LoadModel(modelName)
@@ -3137,10 +3076,10 @@ RegisterNUICallback('deleteAllPeds', function(_, cb)
     TriggerServerEvent('qb-pedplacer:server:deleteAllPeds')
 end)
 
---- Returns ALL currently-spawned placed peds (armed or not), each as
---- { handle, model, weapon, group, id }. rr-checkpoint uses this to find
---- army-model peds and turn them into clearance-gated checkpoint guards,
---- without requiring the ped to be placed with a weapon.
+-- Returns all currently-spawned placed peds (armed or not), each as
+-- { handle, model, weapon, group, id }. rr-checkpoint uses this to find
+-- army-model peds and turn them into clearance-gated checkpoint guards
+-- without requiring the ped to be placed with a weapon.
 exports('GetSpawnedPeds', function()
     local list = {}
     for _, entry in pairs(SpawnedPeds) do
@@ -3159,13 +3098,11 @@ exports('GetSpawnedPeds', function()
     return list
 end)
 
--- ═══════════════════════════════════════════════════════════
---  MODEL DIAGNOSTIC  —  /pedmodelcheck <model>
+--  model diagnostic, /pedmodelcheck <model>
 --  Add-on peds (k9_retriever, etc.) can fail in several different places and
 --  most of them look identical in game ("I click Place and nothing happens").
 --  This walks the exact same path StartPlacement takes and prints where it
 --  stops, so the failure can be named instead of guessed at.
--- ═══════════════════════════════════════════════════════════
 RegisterCommand('pedmodelcheck', function(_, args)
     local modelName = args[1]
     if not modelName then
@@ -3174,13 +3111,13 @@ RegisterCommand('pedmodelcheck', function(_, args)
     end
 
     local hash = joaat(modelName)
-    print(('^5[pedmodelcheck]^0 ── %s (hash %s) ──'):format(modelName, hash))
+    print(('^5[pedmodelcheck]^0 %s (hash %s)'):format(modelName, hash))
     print(('  IsModelValid      : %s'):format(tostring(IsModelValid(hash))))
     print(('  IsModelInCdimage  : %s'):format(tostring(IsModelInCdimage(hash))))
     print(('  IsModelAPed       : %s'):format(tostring(IsModelAPed(hash))))
 
     if not IsModelValid(hash) then
-        print('^1  → NOT REGISTERED on this client. The peds.meta entry never reached you:')
+        print('^1  -> NOT REGISTERED on this client. The peds.meta entry never reached you:')
         print('^1    fully quit FiveM and rejoin (streamed peds register at join, not on restart).^0')
         return
     end
@@ -3192,16 +3129,16 @@ RegisterCommand('pedmodelcheck', function(_, args)
     end
     print(('  HasModelLoaded    : %s  (after %sms)'):format(tostring(HasModelLoaded(hash)), waited))
     if not HasModelLoaded(hash) then
-        print('^1  → model is registered but its stream files never arrive. Clear your FiveM')
+        print('^1  -> model is registered but its stream files never arrive. Clear your FiveM')
         print('^1    cache (Application Data/FiveM/FiveM.app/data/cache) and rejoin.^0')
         return
     end
 
     local min, max = GetModelDimensions(hash)
-    print(('  Model dimensions  : %.2f,%.2f,%.2f → %.2f,%.2f,%.2f'):format(min.x, min.y, min.z, max.x, max.y, max.z))
+    print(('  Model dimensions  : %.2f,%.2f,%.2f -> %.2f,%.2f,%.2f'):format(min.x, min.y, min.z, max.x, max.y, max.z))
 
     -- Spawn one ped per candidate treatment, in a row, each with its letter
-    -- floating above it. Whichever letters you can SEE names the fix.
+    -- floating above it. Whichever letters you can see names the fix.
     local TREATMENTS = {
         { letter = 'A', note = 'raw CreatePed (control)',            pedType = 4,  apply = function() end },
         { letter = 'B', note = 'SetPedDefaultComponentVariation',    pedType = 4,  apply = function(p) SetPedDefaultComponentVariation(p) end },
@@ -3246,18 +3183,18 @@ RegisterCommand('pedmodelcheck', function(_, args)
                 :format(t.letter, t.note, tostring(IsEntityVisible(p)), tostring(GetEntityAlpha(p)),
                         #drawables > 0 and table.concat(drawables, ' ') or '^1NONE^0'))
         else
-            print(('^1  [%s] %s — CreatePed returned nothing^0'):format(t.letter, t.note))
+            print(('^1  [%s] %s - CreatePed returned nothing^0'):format(t.letter, t.note))
         end
     end
 
     if #spawned == 0 then
-        print('^1  → nothing spawned at all even though the model loaded.^0')
+        print('^1  -> nothing spawned at all even though the model loaded.^0')
         SetModelAsNoLongerNeeded(hash)
         return
     end
 
-    print('^3  → LOOK IN FRONT OF YOU. Four peds, labelled A B C D, 20 seconds.')
-    print('^3    Tell me which letters you can actually SEE — that names the fix.^0')
+    print('^3  -> LOOK IN FRONT OF YOU. Four peds, labelled A B C D, 20 seconds.')
+    print('^3    Tell me which letters you can actually SEE - that names the fix.^0')
 
     local until_ = GetGameTimer() + 20000
     while GetGameTimer() < until_ do
