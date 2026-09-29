@@ -3,9 +3,7 @@ local QBCore = nil
 local ok, res = pcall(function() return exports['qb-core']:GetCoreObject() end)
 if ok and res then QBCore = res end
 
--- ═══════════════════════════════════════════════════════════
---  PERMISSION CHECK
--- ═══════════════════════════════════════════════════════════
+-- permission check
 
 local function IsAdmin(src)
     if IsPlayerAceAllowed(src, 'command') then return true end
@@ -26,13 +24,11 @@ local function GetCitizenId(src)
     return 'unknown'
 end
 
--- ═══════════════════════════════════════════════════════════
---  BARTENDER ↔ rr-bartender SYNC
+--  bartender rr-bartender sync
 --  Bartender peds (behavior = 'bartender') register their coords with
 --  rr-bartender so its server-side proximity check accepts drink orders
 --  placed at them. All calls are guarded so qb-pedplacer works fine with
 --  rr-bartender absent.
--- ═══════════════════════════════════════════════════════════
 local bartenderPeds = {}  -- [pedId] = true
 
 local function rrBartenderReady()
@@ -74,20 +70,16 @@ AddEventHandler('onResourceStart', function(res)
     end)
 end)
 
--- ═══════════════════════════════════════════════════════════
---  CALLBACKS
--- ═══════════════════════════════════════════════════════════
+-- callbacks
 
 lib.callback.register('qb-pedplacer:server:getPeds', function(source)
     local result = MySQL.query.await('SELECT * FROM placed_peds', {})
     return result or {}
 end)
 
--- ═══════════════════════════════════════════════════════════
---  GROUP VISIBILITY (hide/show a whole ped group, e.g. a closed business)
+--  group visibility (hide/show a whole ped group, e.g. a closed business)
 --  Session-only (resets on resource restart). Authoritative so late joiners
 --  see the same state.
--- ═══════════════════════════════════════════════════════════
 local HiddenGroups = {}  -- [group_name] = true
 
 lib.callback.register('qb-pedplacer:server:getHiddenGroups', function(source)
@@ -96,7 +88,7 @@ lib.callback.register('qb-pedplacer:server:getHiddenGroups', function(source)
     return list
 end)
 
--- exports['qb-pedplacer']:SetGroupHidden('lifeinvader_office', true)  → despawn for everyone
+-- exports['qb-pedplacer']:SetGroupHidden('lifeinvader_office', true)  -> despawn for everyone
 exports('SetGroupHidden', function(group, hidden)
     if type(group) ~= 'string' or group == '' then return false end
     if hidden then HiddenGroups[group] = true else HiddenGroups[group] = nil end
@@ -104,7 +96,7 @@ exports('SetGroupHidden', function(group, hidden)
     return true
 end)
 
--- AREA visibility — hide every placed ped within a 2D radius of a point,
+-- area visibility, hide every placed ped within a 2D radius of a point
 -- regardless of group (for venues whose peds aren't in a dedicated group).
 -- Keyed so each business manages its own area independently.
 local HiddenAreas = {}  -- [key] = { x, y, r }
@@ -140,9 +132,7 @@ lib.callback.register('qb-pedplacer:server:getDetectors', function(source)
     return result or {}
 end)
 
--- ═══════════════════════════════════════════════════════════
---  RADIO CRUD
--- ═══════════════════════════════════════════════════════════
+-- radio crud
 
 RegisterNetEvent('qb-pedplacer:server:placeRadio', function(data)
     local src = source
@@ -177,9 +167,7 @@ RegisterNetEvent('qb-pedplacer:server:deleteRadio', function(radioId)
     end)
 end)
 
--- ═══════════════════════════════════════════════════════════
---  METAL DETECTOR CRUD
--- ═══════════════════════════════════════════════════════════
+-- metal detector crud
 
 RegisterNetEvent('qb-pedplacer:server:placeDetector', function(data)
     local src = source
@@ -223,9 +211,7 @@ RegisterNetEvent('qb-pedplacer:server:deleteAllDetectors', function()
     end)
 end)
 
--- ═══════════════════════════════════════════════════════════
---  PED CRUD
--- ═══════════════════════════════════════════════════════════
+-- PED crud
 
 RegisterNetEvent('qb-pedplacer:server:placePed', function(data)
     local src = source
@@ -309,9 +295,7 @@ RegisterNetEvent('qb-pedplacer:server:updatePedPosition', function(pedId, x, y, 
     end)
 end)
 
--- ═══════════════════════════════════════════════════════════
---  GROUP CRUD
--- ═══════════════════════════════════════════════════════════
+-- group crud
 
 -- Save nearby peds as a custom group
 RegisterNetEvent('qb-pedplacer:server:saveGroup', function(name, description, pedDataList)
@@ -321,7 +305,7 @@ RegisterNetEvent('qb-pedplacer:server:saveGroup', function(name, description, pe
     local dataJson = json.encode(pedDataList)
     local citizenId = GetCitizenId(src)
 
-    -- Upsert — replace if name already exists
+    -- Upsert, replace if name already exists
     MySQL.query('DELETE FROM ped_groups WHERE name = ?', { name }, function()
         MySQL.insert(
             'INSERT INTO ped_groups (name, description, data, created_by) VALUES (?, ?, ?, ?)',
@@ -360,9 +344,7 @@ RegisterNetEvent('qb-pedplacer:server:deleteGroupPeds', function(groupName)
     end)
 end)
 
--- ═══════════════════════════════════════════════════════════
---  PATROL POINTS
--- ═══════════════════════════════════════════════════════════
+-- patrol points
 
 RegisterNetEvent('qb-pedplacer:server:savePatrolPoints', function(pedId, points)
     local src = source
@@ -374,9 +356,7 @@ RegisterNetEvent('qb-pedplacer:server:savePatrolPoints', function(pedId, points)
     end)
 end)
 
--- ═══════════════════════════════════════════════════════════
---  COMMAND
--- ═══════════════════════════════════════════════════════════
+-- command
 
 RegisterCommand(Config.Command, function(source)
     local src = source
@@ -410,15 +390,15 @@ CreateThread(function()
     end
 
     -- One-time data fix: every drug/stripper "scenario" the placer originally
-    -- shipped used an INVALID animation dict/clip (AI-guessed, not in the game),
+    -- shipped used an invalid animation dict/clip (AI-guessed, not in the game)
     -- so those placed peds silently stood idle. Each {oldDict, oldClip} below is
-    -- rewritten to a dict/clip VERIFIED against the GTA V animation dump. The
-    -- WHERE clauses only match the old bad values, so this is idempotent — a
+    -- rewritten to a dict/clip verified against the GTA V animation dump. The
+    -- where clauses only match the old bad values, so this is idempotent, a
     -- no-op once a server has already been healed.
     --
-    -- NOTE: the coke-packer pair also covers counting-money peds that an earlier
+    -- the coke-packer pair also covers counting-money peds that an earlier
     -- (flawed) build of this fix rewrote to that value, so they end up counting
-    -- money as intended. If you placed any literal "Coke — Packing" peds, just
+    -- money as intended. If you placed any literal "Coke, Packing" peds, just
     -- re-place them from the menu (they'll use the corrected press-operator clip).
     local animFixes = {
         -- counting money (original + earlier-migrated value)
@@ -454,7 +434,7 @@ CreateThread(function()
             { f[3], f[4], f[1], f[2] })
         totalFixed = totalFixed + (n or 0)
     end
-    -- "Gang — Idle w/ Gun" had no valid anim at all; convert those peds to a
+    -- "Gang, Idle w/ Gun" had no valid anim at all; convert those peds to a
     -- guard-stand scenario (pair with a weapon in-game for the armed-lookout look).
     local gunFixed = MySQL.update.await(
         "UPDATE placed_peds SET scenario = 'WORLD_HUMAN_GUARD_STAND', anim_dict = '', anim_name = '' WHERE anim_dict = 'anim@amb@business@bgen@bgen_idle@' AND anim_name = 'idle_a_drugs_gun'",
@@ -503,7 +483,7 @@ CreateThread(function()
     local radioCount = radioResult and radioResult[1] and radioResult[1].cnt or 0
     local detResult = MySQL.query.await('SELECT COUNT(*) as cnt FROM placed_metaldetectors', {})
     local detCount = detResult and detResult[1] and detResult[1].cnt or 0
-    print('^2[qb-pedplacer]^0 Server loaded — /' .. Config.Command .. ' — ' .. count .. ' peds, ' .. radioCount .. ' radios, ' .. detCount .. ' metal detectors in database')
+    print('^2[qb-pedplacer]^0 Server loaded - /' .. Config.Command .. ' - ' .. count .. ' peds, ' .. radioCount .. ' radios, ' .. detCount .. ' metal detectors in database')
 
     -- Register existing bartender peds with rr-bartender (wait for it to start)
     local waited = 0
