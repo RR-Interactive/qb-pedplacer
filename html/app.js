@@ -1,4 +1,4 @@
-/* qb-pedplacer NUI — RR Ped Placer */
+/* qb-pedplacer NUI, RR Ped Placer */
 
 const RES = (typeof GetParentResourceName === 'function') ? GetParentResourceName() : 'qb-pedplacer';
 const IN_GAME = window.invokeNative !== undefined || navigator.userAgent.includes('CitizenFX');
@@ -38,11 +38,11 @@ function initials(model) {
     return (last.slice(0, 2) || model.slice(0, 2)).toUpperCase();
 }
 
-/* Add-on (streamed) peds have no docs.fivem.net portrait — that URL 404s and the
+/* Add-on (streamed) peds have no docs.fivem.net portrait, that URL 404s and the
    tile renders as an empty avatar. Map each add-on model onto the vanilla ped it
    was built from so it still gets a real picture. */
 const PORTRAIT_ALIAS = {
-    k9_retriever: 'a_c_retriever',   // Police K9 — add-on retexture of a_c_retriever
+    k9_retriever: 'a_c_retriever',   // Police K9, add-on retexture of a_c_retriever
 };
 
 function avatarHTML(model) {
@@ -52,7 +52,7 @@ function avatarHTML(model) {
         onerror="this.parentElement.textContent='${fb}'">`;
 }
 
-/* ─── RECENTS (localStorage) ─── */
+/*  recents (localStorage)*/
 function loadRecents() {
     try { state.recents = JSON.parse(localStorage.getItem('pedplacer_recents') || '[]'); }
     catch (e) { state.recents = []; }
@@ -86,7 +86,7 @@ function renderRecents() {
     });
 }
 
-/* ─── CATEGORIES ─── */
+/*  categories*/
 function allModels() {
     const out = [];
     state.data.categories.forEach(c => c.models.forEach(m => out.push(m)));
@@ -115,7 +115,7 @@ function renderCats() {
     });
 }
 
-/* ─── MODEL GRID ─── */
+/*  model grid*/
 function visibleModels() {
     let models = state.activeCat === -1 ? allModels() : state.data.categories[state.activeCat].models;
     if (state.search) {
@@ -156,14 +156,14 @@ function selectModel(model, label) {
     switchPanel('settings');
 }
 
-/* ─── RIGHT PANEL TABS ─── */
+/*  right panel tabs*/
 function switchPanel(name) {
     $$('.rp-tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
     $$('.rp-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
     if (name === 'manage') refreshPeds();
 }
 
-/* ─── SCENARIOS ─── */
+/*  scenarios*/
 function renderScenarios() {
     const q = state.scenSearch.toLowerCase();
     const list = $('#scenList');
@@ -193,7 +193,7 @@ function renderScenarios() {
     });
 }
 
-/* ─── BEHAVIOR FIELDS ─── */
+/*  behavior fields*/
 function onBehaviorChange() {
     const v = $('#behaviorSel').value;
     $('#wanderField').classList.toggle('hidden', v !== 'wander');
@@ -201,7 +201,7 @@ function onBehaviorChange() {
     $('#interactField').classList.toggle('hidden', v !== 'interact');
 }
 
-/* ─── MANAGE ─── */
+/*  manage*/
 function fmtDist(d) {
     return d >= 1000 ? (d / 1000).toFixed(1) + 'km' : Math.round(d) + 'm';
 }
@@ -240,7 +240,7 @@ function renderPeds() {
                 <button class="pa-btn danger" data-act="delete">&#128465; Delete</button>
             </div>
         </div>`).join('');
-    if (peds.length > 200) list.innerHTML += '<div class="list-empty">Showing nearest 200 — use search to narrow down.</div>';
+    if (peds.length > 200) list.innerHTML += '<div class="list-empty">Showing nearest 200 - use search to narrow down.</div>';
 
     list.querySelectorAll('.ped-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -286,7 +286,7 @@ function setPosFields() {
     $('#posZ').value = state.coords.z.toFixed(2);
 }
 
-/* ─── PLACE ─── */
+/*  place*/
 function doPlace() {
     const custom = $('#customModel').value.trim();
     const model = custom || (state.selected && state.selected.model);
@@ -319,7 +319,7 @@ function doPlace() {
     hideApp();
 }
 
-/* ─── OPEN / CLOSE ─── */
+/*  open / close*/
 function hideApp() { $('#app').classList.add('hidden'); }
 function closeUI() { hideApp(); post('close'); }
 
@@ -345,7 +345,7 @@ function openApp(data) {
     $('#searchInput').focus();
 }
 
-/* ─── EVENTS ─── */
+/*  events*/
 window.addEventListener('message', (e) => {
     const msg = e.data || {};
     if (msg.action === 'open') openApp(msg.data);
@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tick();
     setInterval(tick, 15000);
 
-    // Browser dev preview (never runs inside CEF)
+    // Browser dev preview (never runs inside cef)
     if (!IN_GAME) {
         openApp({
             categories: [
@@ -442,10 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ],
             scenarios: [
                 { label: 'None (Idle)', scenario: '' },
-                { label: 'Guard — Stand', scenario: 'WORLD_HUMAN_GUARD_STAND' },
+                { label: 'Guard - Stand', scenario: 'WORLD_HUMAN_GUARD_STAND' },
                 { label: 'Smoking', scenario: 'WORLD_HUMAN_SMOKING' },
                 { label: 'Clipboard', scenario: 'WORLD_HUMAN_CLIPBOARD' },
-                { label: 'Stripper — Pole Dance 1', scenario: '', animDict: 'mini@strip_club@pole_dance@pole_dance1', animName: 'pd_dance_01' },
+                { label: 'Stripper - Pole Dance 1', scenario: '', animDict: 'mini@strip_club@pole_dance@pole_dance1', animName: 'pd_dance_01' },
             ],
             weapons: [
                 { label: 'None', weapon: '' }, { label: 'Pistol', weapon: 'WEAPON_PISTOL' },
@@ -466,14 +466,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-/* ==== RR-DRAG v1 BEGIN — managed block, edit _tools/rr-drag/rr-drag.js and re-run install-drag.ps1 ==== */
+/*  RR-drag v1 begin, managed block, edit _tools/rr-drag/rr-drag.js and re-run install-drag.ps1*/
 /*
- * rr-drag — click-and-drag repositioning for FiveM NUI panels.
+ * rr-drag, click-and-drag repositioning for FiveM NUI panels.
  *
- *   • Drag by a panel's header/top bar (anywhere that isn't a button or input)
- *   • Hold ALT and drag from anywhere on the panel
- *   • ALT + double-click a panel, or ALT+R, to snap back to default
- *   • Position is remembered per resource in localStorage
+ *   - Drag by a panel's header/top bar (anywhere that isn't a button or input)
+ *   - Hold alt and drag from anywhere on the panel
+ *   - alt + double-click a panel, or alt+R, to snap back to default
+ *   - Position is remembered per resource in localStorage
  *
  * Self-contained, dependency-free, safe to run twice. Set window.RRDRAG_DISABLE
  * = true before this block to turn it off for a page, or window.RRDRAG_CONFIG =
@@ -484,17 +484,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.__rrDrag || window.RRDRAG_DISABLE) return;
 
-    /* ── which resource are we? (NUI urls look like https://cfx-nui-rr-phone/…) ── */
+    /*  which resource are we? (NUI urls look like https://cfx-nui-rr-phone/...)*/
     var RES = 'nui';
     var m = /cfx-nui-([a-z0-9_\-\.]+)/i.exec(location.href || '');
     if (m) RES = m[1];
     else if (location.hostname) RES = location.hostname.replace(/^cfx-nui-/, '');
     var PFX = 'rrdrag:' + RES + ':';
 
-    /* ── per-resource tuning ───────────────────────────────────────────────── */
-    /* Phone/tablet frames grab by the SIDE bezels only. Their top strip is
+    /*  per-resource tuning*/
+    /* Phone/tablet frames grab by the side bezels only. Their top strip is
        Control Center / Notification Center swipe territory and the bottom holds
-       the home indicator — a grab band over either one eats the tap. ALT+drag
+       the home indicator, a grab band over either one eats the tap. alt+drag
        still works from anywhere on the frame. */
     var OVERRIDES = {
         'rr-phone': { panel: '#phone', edge: 14, edges: 'lr', topStrip: 0, headers: false, keepX: 200, keepY: 260 },
@@ -525,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '[contenteditable],[onclick],[role="button"],[role="tab"],' +
         '.btn,.button,.nav-btn,.tab,.tb-ic,.tb-search,.chip,.toggle,.switch';
 
-    /* ── helpers ───────────────────────────────────────────────────────────── */
+    /*  helpers*/
     function vw() { return window.innerWidth || document.documentElement.clientWidth; }
     function vh() { return window.innerHeight || document.documentElement.clientHeight; }
 
@@ -534,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return String(s).replace(/([^\w-])/g, '\\$1');
     }
 
-    /* Full-viewport wrappers are backdrops, not windows — never move those. */
+    /* Full-viewport wrappers are backdrops, not windows, never move those. */
     function isBackdrop(r) { return r.width >= vw() * 0.97 && r.height >= vh() * 0.97; }
 
     /* Outermost element under the pointer that looks like a floating window. */
@@ -575,8 +575,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function isHandle(e, panel) {
         var r = panel.getBoundingClientRect(), x = e.clientX, y = e.clientY;
 
-        /* The band tests below are signed distances, so a point OUTSIDE the
-           panel scores as comfortably "within the edge" — bail first. */
+        /* The band tests below are signed distances, so a point outside the
+           panel scores as comfortably "within the edge", bail first. */
         if (x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
 
         if (CFG.edge > 0 &&
@@ -587,7 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (CFG.headers && e.target.closest) {
             var h = e.target.closest(HANDLE_SEL);
-            /* A real title bar spans the panel and sits at the top — this
+            /* A real title bar spans the panel and sits at the top, this
                filters out the ".card-header" of some widget buried inside. */
             if (h && h !== panel && panel.contains(h)) {
                 var hr = h.getBoundingClientRect();
@@ -595,18 +595,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        /* Bare top strip, but only on things big enough to read as a window —
+        /* Bare top strip, but only on things big enough to read as a window
            keeps small overlays and meters from moving by accident. */
         if (CFG.topStrip > 0 && r.width >= 320 && r.height >= 260 && y - r.top <= CFG.topStrip) return true;
 
         return false;
     }
 
-    /* ── move state ────────────────────────────────────────────────────────── */
+    /*  move state*/
     /* Two ways to shift a panel:
-         inset  — already positioned; nudge its left/top (leaves transform alone,
+         inset, already positioned; nudge its left/top (leaves transform alone
                   which matters for frames that centre with translate(-50%,-50%))
-         xform  — in normal flow (flex-centred shells); append a translate3d
+         xform, in normal flow (flex-centred shells); append a translate3d
        `sc` is a calibration factor: CSS zoom or a scaled ancestor means one
        style pixel isn't one screen pixel, so we measure the first real move and
        correct. */
@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.style.right = 'auto';
             el.style.bottom = 'auto';
             /* If it had been stretched between opposing insets, dropping
-               right/bottom collapses it — pin the size we measured instead. */
+               right/bottom collapses it, pin the size we measured instead. */
             var r2 = el.getBoundingClientRect();
             if (Math.abs(r2.width - r.width) > 2 || Math.abs(r2.height - r.height) > 2) {
                 el.style.width = r.width + 'px';
@@ -665,7 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { dx: left - rect.left, dy: top - rect.top };
     }
 
-    /* ── persistence ───────────────────────────────────────────────────────── */
+    /*  persistence*/
     function selectorFor(el) {
         var parts = [], node = el;
         while (node && node.nodeType === 1 && node !== document.body) {
@@ -712,13 +712,13 @@ document.addEventListener('DOMContentLoaded', () => {
     /* After any programmatic move, measure where the panel really ended up and
        walk it back on screen. Style pixels aren't always screen pixels (CSS
        zoom, scaled ancestors), so a clamp computed before apply() can still
-       land the panel offscreen — this corrects against the MEASURED rect and
+       land the panel offscreen, this corrects against the measured rect and
        iterates, which converges even when the scale factor is unknown. */
     function settle(el, st) {
         /* Only inset-mode panels are safe to measure: the engine never puts a
            transform on them, so any non-identity transform is the page's own
            doing (the phone's slide-in, the notification peek that deliberately
-           parks it below the screen edge) and the rect is a lie — correcting
+           parks it below the screen edge) and the rect is a lie, correcting
            against it would bake the transient offset into the base position.
            Skip; the 600ms restore tick lands again once the element is at rest. */
         if (st.mode !== 'inset') return;
@@ -729,7 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (_) {}
         for (var i = 0; i < 4; i++) {
             var r = el.getBoundingClientRect();
-            if (r.width < 1) return;                    // hidden — nothing to measure
+            if (r.width < 1) return;                    // hidden, nothing to measure
             var c = clamp(r, 0, 0);
             if (Math.abs(c.dx) < 1 && Math.abs(c.dy) < 1) return;
             apply(el, st, st.ox + c.dx, st.oy + c.dy);
@@ -745,7 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try { el = document.querySelector(sel); } catch (_) { delete saved[sel]; continue; }
             if (!el) continue;
             if (el.__rrd && el.__rrd.ox === v.ox && el.__rrd.oy === v.oy) {
-                /* Already in the saved spot — but that spot may itself be bad
+                /* Already in the saved spot, but that spot may itself be bad
                    (saved during an animation, or the viewport shrank). Keep
                    nudging it back on screen; settle() no-ops when it's fine. */
                 var rr = el.getBoundingClientRect();
@@ -769,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* ── drag ──────────────────────────────────────────────────────────────── */
+    /*  drag*/
     var drag = null, suppressClick = false;
 
     document.addEventListener('pointerdown', function (e) {
@@ -783,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         /* Armed, not grabbed. Nothing is captured or cancelled yet: a press
            that never moves has to reach the page untouched, or tapping a title
-           bar — or the phone's home indicator — gets eaten. The grab commits on
+           bar, or the phone's home indicator, gets eaten. The grab commits on
            the first real movement, in pointermove. */
         drag = {
             el: panel, st: null, id: e.pointerId,
@@ -814,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
         apply(drag.el, drag.st, drag.ox + c.dx, drag.oy + c.dy);
 
         /* One-time check that a requested pixel actually moved a pixel. Either
-           axis will do — a purely vertical drag on a zoomed panel (the phone)
+           axis will do, a purely vertical drag on a zoomed panel (the phone)
            used to skip this and overshoot, parking the panel offscreen. */
         if (!drag.calibrated && (Math.abs(c.dx) >= 8 || Math.abs(c.dy) >= 8)) {
             drag.calibrated = true;
@@ -825,7 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : rNow.top - drag.r.top;
             if (Math.abs(actual) > 1 && Math.abs(actual - req) > 1) {
                 var s0 = drag.st.sc, s1 = s0 * (req / actual);
-                /* Rebase the accumulated offset too — ox/oy were laid down in
+                /* Rebase the accumulated offset too, ox/oy were laid down in
                    style pixels at the old scale, and multiplying them by the
                    new sc would teleport the panel mid-drag. */
                 drag.st.sc = s1;
@@ -846,7 +846,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try { d.el.releasePointerCapture(d.id); } catch (_) {}
         if (d.moved) {
             /* The in-drag clamp works off the rect captured at grab time, so a
-               scale mismatch can still let the panel slip offscreen — measure
+               scale mismatch can still let the panel slip offscreen, measure
                and pull it back before persisting. */
             settle(d.el, d.st);
             save(d.el, d.st);
@@ -863,7 +863,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
     }, true);
 
-    /* ── reset ─────────────────────────────────────────────────────────────── */
+    /*  reset*/
     function resetEl(el) {
         var st = el.__rrd;
         if (!st) return;
@@ -903,7 +903,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.altKey && (e.key === 'r' || e.key === 'R')) resetAll();
     }, true);
 
-    /* ── keep panels on screen when the window changes size ────────────────── */
+    /*  keep panels on screen when the window changes size*/
     window.addEventListener('resize', function () {
         var els = document.querySelectorAll('[data-rrdrag-panel]');
         for (var i = 0; i < els.length; i++) {
@@ -914,7 +914,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    /* ── boot ──────────────────────────────────────────────────────────────── */
+    /*  boot*/
     var style = document.createElement('style');
     style.textContent =
         'html.rrdrag-dragging,html.rrdrag-dragging *{cursor:grabbing!important;user-select:none!important}' +
@@ -927,4 +927,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.__rrDrag = { version: 1, resource: RES, cfg: CFG, reset: resetAll, restore: restore };
 })();
-/* ==== RR-DRAG v1 END ==== */
+/*  RR-drag v1 end*/

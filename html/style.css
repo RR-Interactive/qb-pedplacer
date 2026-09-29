@@ -63,7 +63,7 @@ body {
     box-shadow: var(--shadow);
 }
 
-/* ─── TOPBAR ─── */
+/*  topbar*/
 .topbar {
     display: flex; align-items: center; gap: 18px;
     padding: 12px 18px;
@@ -99,10 +99,10 @@ body {
 }
 .tb-ic:hover { border-color: var(--red); color: var(--red); background: var(--red-soft); }
 
-/* ─── BODY ─── */
+/*  body*/
 .app-body { flex: 1; display: flex; min-height: 0; }
 
-/* ─── SIDEBAR ─── */
+/*  sidebar*/
 .sidebar {
     width: var(--sidebar-width); flex-shrink: 0;
     background: var(--bg-sidebar);
@@ -161,7 +161,7 @@ body {
 .sidebar-foot { margin-top: auto; padding: 12px 10px 2px; }
 .sys-ok { font-size: 10.5px; font-weight: 700; color: var(--green); letter-spacing: .5px; }
 
-/* ─── CONTENT / MODEL GRID ─── */
+/*  content / model grid*/
 .content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .grid-head {
     display: flex; align-items: baseline; gap: 10px;
@@ -211,7 +211,7 @@ body {
 }
 .kb b { color: var(--accent); font-weight: 800; margin-right: 4px; }
 
-/* ─── RIGHT PANEL ─── */
+/*  right panel*/
 .rightpanel {
     width: 300px; flex-shrink: 0;
     background: var(--bg-sidebar);
@@ -353,7 +353,7 @@ body {
 .place-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
 .place-btn:active { transform: translateY(0); }
 
-/* ─── SCENARIO LIST ─── */
+/*  scenario list*/
 .scen-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; min-height: 0; }
 .scen-item {
     padding: 8px 11px; border-radius: var(--radius);
@@ -365,7 +365,7 @@ body {
 .scen-item.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--text-bright); }
 .scen-sub { display: block; font-size: 9px; color: var(--text-mute); font-weight: 500; margin-top: 2px; word-break: break-all; }
 
-/* ─── MANAGE ─── */
+/*  manage*/
 .manage-head { display: flex; gap: 6px; }
 .ped-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 .ped-item {
