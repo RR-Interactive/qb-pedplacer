@@ -2,7 +2,8 @@ fx_version 'cerulean'
 game 'gta5'
 
 name 'qb-pedplacer'
-description 'QBCore Ped/NPC Placer — place, persist & manage peds via ox_lib menus'
+description 'Place, save and manage NPC peds from an in-game menu'
+repository 'https://github.com/RR-Interactive/qb-pedplacer'
 author 'RR Interactive'
 version '1.6.3'
 

@@ -6,41 +6,39 @@ Config.Command = 'pedplacer'
 -- QBCore permission group required (e.g. 'admin', 'god', 'mod')
 Config.RequiredPermission = 'admin'
 
--- ═══════════════════════════════════════════════════════════
---  PERSISTENCE MODE
--- ═══════════════════════════════════════════════════════════
--- When true, a placed ped is spawned the FIRST time you come within range and
--- then kept loaded for the rest of the session — it is NEVER despawned just
+-- persistence mode
+-- When true, a placed ped is spawned the first time you come within range and
+-- then kept loaded for the rest of the session, it is never despawned just
 -- because you walked away. This fixes the "peds in some MLOs don't load (or load
 -- wrong) until I reset the resource" problem: the ped is created once, while
 -- you're there and the interior is fully streamed in, and then it simply stays.
 -- If the engine ever culls it, the script notices the next tick and recreates
--- it automatically — no resource reset needed.
+-- it automatically, no resource reset needed.
 --
 -- (Peds are only ever spawned when you're nearby, never blindly across the whole
 -- map, so an unstreamed area can never spawn a broken/falling ped.)
 --
--- ⚠ The real limit here is NOT your RAM — it's GTA's PED POOL, a hard engine
+-- The real limit here is not your RAM, it's GTA's PED pool, a hard engine
 -- cap (~256 peds) shared with every ambient NPC. Permanent mode is fine for a
 -- few dozen placed peds. If you roam the whole map they accumulate as loaded
 -- peds; if you ever hit the cap, set this back to false to stream them instead.
--- NOTE: this server has ~1,100 placed peds, which is FAR more than GTA's ped
--- pool (~256, shared with ambient NPCs) can hold at once. So this MUST stay
--- false — peds stream in/out by distance to stay under the cap. The "peds in
+-- this server has ~1,100 placed peds, which is far more than GTA's ped
+-- pool (~256, shared with ambient NPCs) can hold at once. So this must stay
+-- false, peds stream in/out by distance to stay under the cap. The "peds in
 -- MLOs vanish until I reset" bug is fixed separately by the auto-respawn
 -- (cull-detection) in StreamPeds, which works in this streaming mode too.
 -- Only flip this to true if you ever cut down to a few dozen total peds.
 Config.PermanentPeds = false
 
--- Render distance for spawned peds (in units) — how close you must get for a ped
+-- Render distance for spawned peds (in units), how close you must get for a ped
 -- to spawn. In PermanentPeds mode it then stays loaded; in streaming mode
 -- (PermanentPeds = false) it despawns again once you pass back beyond this.
 -- 80 -> 350 (load early, no pop-in) -> 100 (2026-08-05).
--- 350 was too far: scenario/wander peds spawn UNFROZEN so gravity can settle
+-- 350 was too far: scenario/wander peds spawn unfrozen so gravity can settle
 -- them, and at 350 units they were being created out in unloaded space with no
 -- collision and no navmesh under them. They then physics-settled and their
 -- scenario task re-anchored to whatever facing it could find, so peds you had
--- placed perfectly were rotated (often a full 180) by the time you walked up —
+-- placed perfectly were rotated (often a full 180) by the time you walked up
 -- the "my peds are backwards after a restart" bug. 100 keeps them inside loaded
 -- world space while still spawning them well before they're visible.
 Config.RenderDistance = 100.0
@@ -59,14 +57,12 @@ Config.Frozen = true
 -- Block ped from fleeing / reacting to events by default
 Config.BlockEvents = true
 
--- ═══════════════════════════════════════════════════════════
---  BEHAVIOR TYPES
+-- behavior types
 --  idle     = stands still (legacy)
 --  scenario = plays a GTA scenario animation
 --  patrol   = walks between waypoints you define
 --  wander   = roams freely within a radius
 --  interact = pairs with nearby peds (chat, dance, argue, etc.)
--- ═══════════════════════════════════════════════════════════
 Config.BehaviorTypes = {
     { label = 'Idle (Stand Still)',      value = 'idle' },
     { label = 'Play Scenario',           value = 'scenario' },
@@ -86,9 +82,7 @@ Config.DefaultWanderRadius = 15.0
 Config.WanderMinWait = 3
 Config.WanderMaxWait = 10
 
--- ═══════════════════════════════════════════════════════════
---  INTERACTION ANIMATIONS  (ped-to-ped behaviors)
--- ═══════════════════════════════════════════════════════════
+--  interaction animations  (ped-to-ped behaviors)
 Config.Interactions = {
     { label = 'Conversation',            scenario = 'WORLD_HUMAN_STAND_IMPATIENT' },
     { label = 'Argue',                   scenario = 'WORLD_HUMAN_HANG_OUT_STREET' },
@@ -99,12 +93,10 @@ Config.Interactions = {
     { label = 'Musician & Audience',    scenario = 'WORLD_HUMAN_MUSICIAN' },
 }
 
--- ═══════════════════════════════════════════════════════════
---  CASINO DEALER (BLACKJACK) INTEGRATION
+--  casino dealer (blackjack) integration
 --  When a casino dealer is placed AT a blackjack table it snaps to that
---  table and registers a PLAYABLE dealer with the casino engine. No table
+--  table and registers a playable dealer with the casino engine. No table
 --  in range -> a normal decorative dealer ped is placed instead.
--- ═══════════════════════════════════════════════════════════
 Config.CasinoPlacer = 'rr-casino-placer'   -- resource that owns the playable-dealer registry
 Config.CasinoSnapRadius = 3.5               -- how close (m) to a table prop counts as "at the table"
 Config.CasinoTableModels = {
@@ -114,25 +106,21 @@ Config.CasinoTableModels = {
     'h4_prop_casino_3cardpoker_01c', 'h4_prop_casino_3cardpoker_01e',
 }
 
--- ═══════════════════════════════════════════════════════════
---  ADD-ON PEDS
--- ═══════════════════════════════════════════════════════════
+--  add-ON PEDS
 -- Add-on ("streamed gfx") peds ship their body parts as loose ^component .ydd
 -- files plus a .ymt listing the variations. Some add-on ymts never get a
--- variation auto-applied on CreatePed, so the ped spawns with NO geometry — it
+-- variation auto-applied on CreatePed, so the ped spawns with NO geometry, it
 -- exists, it's solid, it blocks bullets, you just can't see it. That looks
 -- exactly like "the placer did nothing". Listing a model here makes the placer
 -- force component drawable 0 / texture 0 on it right after spawning.
 --
--- ⚠ Vanilla peds MUST stay out of this list. Forcing drawable 0 on them would
+-- Vanilla peds must stay out of this list. Forcing drawable 0 on them would
 -- strip their random clothing roll and make every copy of a model identical.
 Config.AddonPeds = {
-    ['k9_retriever'] = true,   -- Police K9 — retriever_k9 in resources/[assets]
+    ['k9_retriever'] = true,   -- Police K9, retriever_k9 in resources/[assets]
 }
 
--- ═══════════════════════════════════════════════════════════
---  PRESET CATEGORIES
--- ═══════════════════════════════════════════════════════════
+-- preset categories
 Config.Presets = {
     {
         label = '🎰 Casino',
@@ -488,32 +476,30 @@ Config.Presets = {
     },
 }
 
--- ═══════════════════════════════════════════════════════════
---  SCENARIO LIST  (GTA V ambient animations)
--- ═══════════════════════════════════════════════════════════
+--  scenario list  (GTA V ambient animations)
 -- All scenarios below are verified from GTA V's pedscenarios.meta.
 -- Only scenarios that start cleanly with TaskStartScenarioInPlace (no
 -- surface-alignment required) are included.
 Config.Scenarios = {
     { label = 'None (Idle)',                scenario = '' },
 
-    -- ─── GUARD / LAW ENFORCEMENT ───
-    { label = 'Guard — Stand',             scenario = 'WORLD_HUMAN_GUARD_STAND' },
-    { label = 'Guard — Patrol',            scenario = 'WORLD_HUMAN_GUARD_PATROL' },
-    { label = 'Guard — Stand (Army)',      scenario = 'WORLD_HUMAN_GUARD_STAND_ARMY' },
-    { label = 'Cop — Idle',                scenario = 'WORLD_HUMAN_COP_IDLES' },
+    -- guard / law enforcement
+    { label = 'Guard - Stand',             scenario = 'WORLD_HUMAN_GUARD_STAND' },
+    { label = 'Guard - Patrol',            scenario = 'WORLD_HUMAN_GUARD_PATROL' },
+    { label = 'Guard - Stand (Army)',      scenario = 'WORLD_HUMAN_GUARD_STAND_ARMY' },
+    { label = 'Cop - Idle',                scenario = 'WORLD_HUMAN_COP_IDLES' },
     { label = 'Clipboard',                 scenario = 'WORLD_HUMAN_CLIPBOARD' },
-    { label = 'Stand — Impatient',         scenario = 'WORLD_HUMAN_STAND_IMPATIENT' },
+    { label = 'Stand - Impatient',         scenario = 'WORLD_HUMAN_STAND_IMPATIENT' },
 
-    -- ─── SMOKING / DRINKING ───
+    -- smoking / drinking
     { label = 'Smoking',                   scenario = 'WORLD_HUMAN_SMOKING' },
-    { label = 'Smoking — Pot',             scenario = 'WORLD_HUMAN_SMOKING_POT' },
-    { label = 'Smoking — Aggressive',      scenario = 'WORLD_HUMAN_AA_SMOKE' },
+    { label = 'Smoking - Pot',             scenario = 'WORLD_HUMAN_SMOKING_POT' },
+    { label = 'Smoking - Aggressive',      scenario = 'WORLD_HUMAN_AA_SMOKE' },
     { label = 'Drinking Coffee',           scenario = 'WORLD_HUMAN_DRINKING' },
-    { label = 'Drinking — Aggressive',     scenario = 'WORLD_HUMAN_AA_COFFEE' },
+    { label = 'Drinking - Aggressive',     scenario = 'WORLD_HUMAN_AA_COFFEE' },
 
-    -- ─── SITTING (PROP-SPAWNING — no floating) ───
-    -- These scenarios spawn their OWN bench/chair/etc. No external prop required.
+    -- sitting (prop-spawning, no floating)
+    -- These scenarios spawn their own bench/chair/etc. No external prop required.
     { label = '🪑 Sit on Bench (w/ bench)', scenario = 'PROP_HUMAN_SEAT_BENCH' },
     { label = '🪑 Sit on Chair',            scenario = 'PROP_HUMAN_SEAT_CHAIR' },
     { label = '🪑 Sit on Office Chair',     scenario = 'PROP_HUMAN_SEAT_CHAIR_MP_PLAYER' },
@@ -524,7 +510,7 @@ Config.Scenarios = {
     { label = '🪑 Sit at Strip Club',       scenario = 'PROP_HUMAN_SEAT_STRIP_WATCH' },
     { label = '🏋️ Chin-Ups Bar',             scenario = 'PROP_HUMAN_MUSCLE_CHIN_UPS' },
 
-    -- ─── STANDING / CASUAL ───
+    -- standing / casual
     { label = 'Leaning on Wall',           scenario = 'WORLD_HUMAN_LEANING' },
     { label = 'Stand with Phone',          scenario = 'WORLD_HUMAN_STAND_MOBILE' },
     { label = 'Tourist Map',               scenario = 'WORLD_HUMAN_TOURIST_MAP' },
@@ -532,7 +518,7 @@ Config.Scenarios = {
     { label = 'Window Shop',               scenario = 'WORLD_HUMAN_WINDOW_SHOP_BROWSE' },
     { label = 'Hiker',                     scenario = 'WORLD_HUMAN_HIKER' },
 
-    -- ─── FITNESS ───
+    -- fitness
     { label = 'Pushups',                   scenario = 'WORLD_HUMAN_PUSH_UPS' },
     { label = 'Situps',                    scenario = 'WORLD_HUMAN_SIT_UPS' },
     { label = 'Yoga',                      scenario = 'WORLD_HUMAN_YOGA' },
@@ -540,90 +526,88 @@ Config.Scenarios = {
     { label = 'Muscle Free Weights',       scenario = 'WORLD_HUMAN_MUSCLE_FREE_WEIGHTS' },
     { label = 'Jogging (in place)',        scenario = 'WORLD_HUMAN_JOG_STANDING' },
 
-    -- ─── WORK SCENARIOS ───
+    -- work scenarios
     { label = 'Fishing',                   scenario = 'WORLD_HUMAN_STAND_FISHING' },
     { label = 'Hammering',                 scenario = 'WORLD_HUMAN_HAMMERING' },
     { label = 'Welding',                   scenario = 'WORLD_HUMAN_WELDING' },
     { label = 'Janitor',                   scenario = 'WORLD_HUMAN_JANITOR' },
-    { label = 'Maid — Clean',              scenario = 'WORLD_HUMAN_MAID_CLEAN' },
-    { label = 'Gardener — Leaf Blower',    scenario = 'WORLD_HUMAN_GARDENER_LEAF_BLOWER' },
-    { label = 'Gardener — Plant Seed',     scenario = 'WORLD_HUMAN_GARDENER_PLANT' },
+    { label = 'Maid - Clean',              scenario = 'WORLD_HUMAN_MAID_CLEAN' },
+    { label = 'Gardener - Leaf Blower',    scenario = 'WORLD_HUMAN_GARDENER_LEAF_BLOWER' },
+    { label = 'Gardener - Plant Seed',     scenario = 'WORLD_HUMAN_GARDENER_PLANT' },
     { label = 'Construction Drill',        scenario = 'WORLD_HUMAN_CONST_DRILL' },
     { label = 'Parking Attendant',         scenario = 'WORLD_HUMAN_CAR_PARK_ATTENDANT' },
-    { label = 'Mechanic — Under Car',      scenario = 'WORLD_HUMAN_VEHICLE_MECHANIC' },
+    { label = 'Mechanic - Under Car',      scenario = 'WORLD_HUMAN_VEHICLE_MECHANIC' },
     { label = 'Human Statue',              scenario = 'WORLD_HUMAN_HUMAN_STATUE' },
     { label = 'Drug Dealer',               scenario = 'WORLD_HUMAN_DRUG_DEALER' },
 
-    -- ─── BUM / HOMELESS ───
-    { label = 'Bum — Standing',            scenario = 'WORLD_HUMAN_BUM_STANDING' },
-    { label = 'Bum — Freeway',             scenario = 'WORLD_HUMAN_BUM_FREEWAY' },
-    { label = 'Bum — Wash Window',         scenario = 'WORLD_HUMAN_BUM_WASH' },
+    -- bum / homeless
+    { label = 'Bum - Standing',            scenario = 'WORLD_HUMAN_BUM_STANDING' },
+    { label = 'Bum - Freeway',             scenario = 'WORLD_HUMAN_BUM_FREEWAY' },
+    { label = 'Bum - Wash Window',         scenario = 'WORLD_HUMAN_BUM_WASH' },
 
-    -- ─── SOCIAL / ENTERTAINMENT ───
+    -- social / entertainment
     { label = 'Cheering',                  scenario = 'WORLD_HUMAN_CHEERING' },
-    { label = 'Hang Out — Street',         scenario = 'WORLD_HUMAN_HANG_OUT_STREET' },
+    { label = 'Hang Out - Street',         scenario = 'WORLD_HUMAN_HANG_OUT_STREET' },
     { label = 'Partying',                  scenario = 'WORLD_HUMAN_PARTYING' },
     { label = 'Picnic',                    scenario = 'WORLD_HUMAN_PICNIC' },
     { label = 'Musician',                  scenario = 'WORLD_HUMAN_MUSICIAN' },
     { label = 'Paparazzi',                 scenario = 'WORLD_HUMAN_PAPARAZZI' },
-    { label = 'Prostitute — High Class',   scenario = 'WORLD_HUMAN_PROSTITUTE_HIGH_CLASS' },
-    { label = 'Prostitute — Low Class',    scenario = 'WORLD_HUMAN_PROSTITUTE_LOW_CLASS' },
+    { label = 'Prostitute - High Class',   scenario = 'WORLD_HUMAN_PROSTITUTE_HIGH_CLASS' },
+    { label = 'Prostitute - Low Class',    scenario = 'WORLD_HUMAN_PROSTITUTE_LOW_CLASS' },
     { label = 'Strip Watch Stand',         scenario = 'WORLD_HUMAN_STRIP_WATCH_STAND' },
     { label = 'Sunbathe (Back)',           scenario = 'WORLD_HUMAN_SUNBATHE' },
     { label = 'Sunbathe (Belly)',          scenario = 'WORLD_HUMAN_SUNBATHE_BACK' },
 
-    -- ─── STRIPPER ANIMATIONS (anim dicts, not scenarios) ───
-    { label = 'Stripper — Pole Dance 1',   scenario = '', animDict = 'mini@strip_club@pole_dance@pole_dance1', animName = 'pd_dance_01' },
-    { label = 'Stripper — Pole Dance 2',   scenario = '', animDict = 'mini@strip_club@pole_dance@pole_dance2', animName = 'pd_dance_02' },
-    { label = 'Stripper — Pole Dance 3',   scenario = '', animDict = 'mini@strip_club@pole_dance@pole_dance3', animName = 'pd_dance_03' },
-    { label = 'Stripper — Private Dance',  scenario = '', animDict = 'mini@strip_club@private_dance@part1', animName = 'priv_dance_p1' },
-    { label = 'Stripper — Private Dance 2',scenario = '', animDict = 'mini@strip_club@private_dance@part2', animName = 'priv_dance_p2' },
-    { label = 'Stripper — Private Dance 3',scenario = '', animDict = 'mini@strip_club@private_dance@part3', animName = 'priv_dance_p3' },
-    { label = 'Stripper — Lap Dance',      scenario = '', animDict = 'mini@strip_club@lap_dance@ld_girl_a_song_a_p1', animName = 'ld_girl_a_song_a_p1_f' },
+    -- stripper animations (anim dicts, not scenarios)
+    { label = 'Stripper - Pole Dance 1',   scenario = '', animDict = 'mini@strip_club@pole_dance@pole_dance1', animName = 'pd_dance_01' },
+    { label = 'Stripper - Pole Dance 2',   scenario = '', animDict = 'mini@strip_club@pole_dance@pole_dance2', animName = 'pd_dance_02' },
+    { label = 'Stripper - Pole Dance 3',   scenario = '', animDict = 'mini@strip_club@pole_dance@pole_dance3', animName = 'pd_dance_03' },
+    { label = 'Stripper - Private Dance',  scenario = '', animDict = 'mini@strip_club@private_dance@part1', animName = 'priv_dance_p1' },
+    { label = 'Stripper - Private Dance 2',scenario = '', animDict = 'mini@strip_club@private_dance@part2', animName = 'priv_dance_p2' },
+    { label = 'Stripper - Private Dance 3',scenario = '', animDict = 'mini@strip_club@private_dance@part3', animName = 'priv_dance_p3' },
+    { label = 'Stripper - Lap Dance',      scenario = '', animDict = 'mini@strip_club@lap_dance@ld_girl_a_song_a_p1', animName = 'ld_girl_a_song_a_p1_f' },
 
-    -- ─── DRUGS / CRIMINAL ENTERPRISE ───
+    -- drugs / criminal enterprise
     -- Every dict + clip below was verified against the authoritative GTA V
     -- animation dump (DurtyFree/gta-v-data-dumps). The previous values for this
-    -- whole block were invalid dict/clip names (AI-guessed, never in the game),
-    -- which is why the peds silently stood idle. Do NOT "tidy" these strings.
+    -- whole block were invalid dict/clip names (AI-guessed, never in the game)
+    -- which is why the peds silently stood idle. Do not "tidy" these strings.
     -- Weed
-    { label = '🌿 Weed — Inspecting',       scenario = '', animDict = 'anim@amb@business@weed@weed_inspecting_lo_med_hi@', animName = 'weed_stand_checkingleaves_idle_01_inspector' },
-    { label = '🌿 Weed — Inspecting 2',     scenario = '', animDict = 'anim@amb@business@weed@weed_inspecting_lo_med_hi@', animName = 'weed_stand_checkingleaves_idle_02_inspector' },
-    { label = '🌿 Weed — Sorting (seated)', scenario = '', animDict = 'anim@amb@business@weed@weed_sorting_seated@', animName = 'sorter_left_sort_v2_chair01' },
+    { label = '🌿 Weed - Inspecting',       scenario = '', animDict = 'anim@amb@business@weed@weed_inspecting_lo_med_hi@', animName = 'weed_stand_checkingleaves_idle_01_inspector' },
+    { label = '🌿 Weed - Inspecting 2',     scenario = '', animDict = 'anim@amb@business@weed@weed_inspecting_lo_med_hi@', animName = 'weed_stand_checkingleaves_idle_02_inspector' },
+    { label = '🌿 Weed - Sorting (seated)', scenario = '', animDict = 'anim@amb@business@weed@weed_sorting_seated@', animName = 'sorter_left_sort_v2_chair01' },
 
     -- Cocaine
-    { label = '❄️ Coke — Cutting',           scenario = '', animDict = 'anim@amb@business@coc@coc_unpack_cut_left@', animName = 'coke_cut_v1_coccutter' },
-    { label = '❄️ Coke — Packing (press)',  scenario = '', animDict = 'anim@amb@business@coc@coc_packing@', animName = 'idle_v1_pressoperator' },
-    { label = '❄️ Coke — Lab Worker Idle',  scenario = '', animDict = 'anim@amb@business@bgen@bgen_no_work@', animName = 'stand_phone_idle_01_nowork' },
-    { label = '❄️ Coke — Phone Putdown',    scenario = '', animDict = 'anim@amb@business@bgen@bgen_no_work@', animName = 'stand_phone_phoneputdown_idle_nowork' },
+    { label = '❄️ Coke - Cutting',           scenario = '', animDict = 'anim@amb@business@coc@coc_unpack_cut_left@', animName = 'coke_cut_v1_coccutter' },
+    { label = '❄️ Coke - Packing (press)',  scenario = '', animDict = 'anim@amb@business@coc@coc_packing@', animName = 'idle_v1_pressoperator' },
+    { label = '❄️ Coke - Lab Worker Idle',  scenario = '', animDict = 'anim@amb@business@bgen@bgen_no_work@', animName = 'stand_phone_idle_01_nowork' },
+    { label = '❄️ Coke - Phone Putdown',    scenario = '', animDict = 'anim@amb@business@bgen@bgen_no_work@', animName = 'stand_phone_phoneputdown_idle_nowork' },
 
     -- Meth
-    { label = '🧪 Meth — Cooking',           scenario = '', animDict = 'anim@amb@business@meth@meth_monitoring_cooking@cooking@', animName = 'base_idle_tank_cooker' },
-    { label = '🧪 Meth — Cook (idle)',       scenario = '', animDict = 'anim@amb@business@meth@meth_monitoring_no_work@', animName = 'base_lazycook' },
+    { label = '🧪 Meth - Cooking',           scenario = '', animDict = 'anim@amb@business@meth@meth_monitoring_cooking@cooking@', animName = 'base_idle_tank_cooker' },
+    { label = '🧪 Meth - Cook (idle)',       scenario = '', animDict = 'anim@amb@business@meth@meth_monitoring_no_work@', animName = 'base_lazycook' },
 
     -- Generic criminal-enterprise ops
     { label = '💵 Counting Money',           scenario = '', animDict = 'anim@amb@business@cfm@cfm_counting_notes@', animName = 'note_counting_v2_counter' },
-    { label = '💵 Cash Press — Operator',    scenario = '', animDict = 'anim@amb@business@cfm@cfm_machine_no_work@', animName = 'hanging_out_operator' },
-    { label = '🤝 Drug Deal — Handoff',      scenario = '', animDict = 'mp_common', animName = 'givetake1_a' },
+    { label = '💵 Cash Press - Operator',    scenario = '', animDict = 'anim@amb@business@cfm@cfm_machine_no_work@', animName = 'hanging_out_operator' },
+    { label = '🤝 Drug Deal - Handoff',      scenario = '', animDict = 'mp_common', animName = 'givetake1_a' },
     { label = '🚬 Drug Dealer (street)',     scenario = 'WORLD_HUMAN_DRUG_DEALER' },
-    { label = '👥 Gang — Hangout Idle',      scenario = '', animDict = 'anim@heists@narcotics@funding@gang_idle', animName = 'gang_chatting_idle01' },
+    { label = '👥 Gang - Hangout Idle',      scenario = '', animDict = 'anim@heists@narcotics@funding@gang_idle', animName = 'gang_chatting_idle01' },
     { label = '🔫 Armed Lookout (Guard)',   scenario = 'WORLD_HUMAN_GUARD_STAND' }, -- give a weapon via the Weapon menu
-    { label = '🙇 Hostage — Kneel/Hands',    scenario = '', animDict = 'random@arrests', animName = 'kneeling_arrest_idle' },
+    { label = '🙇 Hostage - Kneel/Hands',    scenario = '', animDict = 'random@arrests', animName = 'kneeling_arrest_idle' },
     { label = '🙌 Hands Up (Robbery)',       scenario = '', animDict = 'missminuteman_1ig_2', animName = 'handsup_base' },
 
-    -- ─── ANIMALS ───
-    { label = 'Dog — Barking (Rottweiler)',scenario = 'WORLD_DOG_BARKING_ROTTWEILER' },
-    { label = 'Dog — Barking (Retriever)', scenario = 'WORLD_DOG_BARKING_RETRIEVER' },
-    { label = 'Dog — Barking (Shepherd)',  scenario = 'WORLD_DOG_BARKING_SHEPHERD' },
-    { label = 'Dog — Sleeping (yard)',     scenario = 'WORLD_DOG_SLEEPING_IN_YARD' },
-    { label = 'Dog — Sleeping (pavement)', scenario = 'WORLD_DOG_SLEEPING_PAVEMENT' },
-    { label = 'Cat — Sleeping (ground)',   scenario = 'WORLD_CAT_SLEEPING_GROUND' },
-    { label = 'Cat — Sleeping (ledge)',    scenario = 'WORLD_CAT_SLEEPING_LEDGE' },
+    -- animals
+    { label = 'Dog - Barking (Rottweiler)',scenario = 'WORLD_DOG_BARKING_ROTTWEILER' },
+    { label = 'Dog - Barking (Retriever)', scenario = 'WORLD_DOG_BARKING_RETRIEVER' },
+    { label = 'Dog - Barking (Shepherd)',  scenario = 'WORLD_DOG_BARKING_SHEPHERD' },
+    { label = 'Dog - Sleeping (yard)',     scenario = 'WORLD_DOG_SLEEPING_IN_YARD' },
+    { label = 'Dog - Sleeping (pavement)', scenario = 'WORLD_DOG_SLEEPING_PAVEMENT' },
+    { label = 'Cat - Sleeping (ground)',   scenario = 'WORLD_CAT_SLEEPING_GROUND' },
+    { label = 'Cat - Sleeping (ledge)',    scenario = 'WORLD_CAT_SLEEPING_LEDGE' },
 }
 
--- ═══════════════════════════════════════════════════════════
---  WEAPONS  (optional — give a ped a weapon in-hand)
--- ═══════════════════════════════════════════════════════════
+--  weapons  (optional, give a ped a weapon in-hand)
 Config.Weapons = {
     { label = 'None',                weapon = '' },
     { label = 'Pistol',             weapon = 'WEAPON_PISTOL' },
@@ -646,10 +630,8 @@ Config.Weapons = {
     { label = 'Micro SMG',          weapon = 'WEAPON_MICROSMG' },
 }
 
--- ═══════════════════════════════════════════════════════════
---  RADIO — speaker props + stations
--- ═══════════════════════════════════════════════════════════
--- Radio speaker prop render distance (visual only — radio audio range is
+--  radio, speaker props + stations
+-- Radio speaker prop render distance (visual only, radio audio range is
 -- still controlled by the per-radio range in the closest-zone loop below).
 -- Bumped 80 -> 350 to match ped render distance.
 Config.RadioRenderDistance = 60.0
@@ -691,9 +673,7 @@ Config.RadioStations = {
     { label = 'LS Underground Radio',       station = 'RADIO_22_DLC_BATTLE_MIX1_RADIO' },
 }
 
--- ═══════════════════════════════════════════════════════════
---  METAL DETECTOR — placeable archway that beeps at armed peds
--- ═══════════════════════════════════════════════════════════
+--  metal detector, placeable archway that beeps at armed peds
 -- Reuses the prop + alarm sound from the "metal-detectors" resource: the
 -- model is streamed by that resource and the beep is fired through its
 -- shared `DetectorAlarm` event (so other nearby players hear it too). If
@@ -706,13 +686,11 @@ Config.MetalDetector = {
     label       = 'Metal Detector',
 }
 
--- ═══════════════════════════════════════════════════════════
---  PRESET GROUPS — pre-built formations you can place at once
--- ═══════════════════════════════════════════════════════════
+--  preset groups, pre-built formations you can place at once
 Config.PresetGroups = {
     {
         label = '🏢 Police Station Crew',
-        description = '8 peds — cops at desks, patrolling, guarding entrance',
+        description = '8 peds - cops at desks, patrolling, guarding entrance',
         peds = {
             { model = 's_m_y_cop_01',    label = 'Desk Cop 1',       offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_CLIPBOARD',    weapon = '' },
             { model = 's_f_y_cop_01',    label = 'Desk Cop 2',       offsetX = 2.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_CLIPBOARD',    weapon = '' },
@@ -726,7 +704,7 @@ Config.PresetGroups = {
     },
     {
         label = '💃 Strip Club Staff',
-        description = '6 peds — strippers, bouncer, bartender',
+        description = '6 peds - strippers, bouncer, bartender',
         peds = {
             { model = 's_f_y_stripper_01', label = 'Dancer 1',     offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_PARTYING',                weapon = '' },
             { model = 's_f_y_stripper_02', label = 'Dancer 2',     offsetX = 2.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_PARTYING',                weapon = '' },
@@ -738,7 +716,7 @@ Config.PresetGroups = {
     },
     {
         label = '🛡️ Guard Post',
-        description = '4 peds — armed guards patrolling an area',
+        description = '4 peds - armed guards patrolling an area',
         peds = {
             { model = 's_m_m_security_01', label = 'Guard 1',       offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_GUARD_STAND', weapon = 'WEAPON_PISTOL' },
             { model = 's_m_m_security_01', label = 'Guard 2',       offsetX = 4.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_GUARD_STAND', weapon = 'WEAPON_PISTOL' },
@@ -748,7 +726,7 @@ Config.PresetGroups = {
     },
     {
         label = '🏥 Hospital Staff',
-        description = '4 peds — doctors and paramedics',
+        description = '4 peds - doctors and paramedics',
         peds = {
             { model = 's_m_m_doctor_01',    label = 'Doctor 1',     offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_CLIPBOARD', weapon = '' },
             { model = 's_m_m_doctor_01',    label = 'Doctor 2',     offsetX = 3.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'interact', scenario = '',                      weapon = '' },
@@ -758,7 +736,7 @@ Config.PresetGroups = {
     },
     {
         label = '🏪 Store Front',
-        description = '3 peds — shopkeeper and loitering civilians',
+        description = '3 peds - shopkeeper and loitering civilians',
         peds = {
             { model = 'mp_m_shopkeep_01',  label = 'Shopkeeper',    offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_STAND_IMPATIENT', weapon = '' },
             { model = 'a_m_y_business_03', label = 'Customer 1',    offsetX = -2.0, offsetY = -3.0, offsetZ = 0.0, heading = 0.0,   behavior = 'wander',   scenario = '',                           weapon = '' },
@@ -767,7 +745,7 @@ Config.PresetGroups = {
     },
     {
         label = '🎖️ Military Patrol Squad',
-        description = '6 peds — armed soldiers patrolling and guarding (Cayo Island ready)',
+        description = '6 peds - armed soldiers patrolling and guarding (Cayo Island ready)',
         peds = {
             { model = 's_m_y_blackops_01',  label = 'Squad Leader',    offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_GUARD_STAND',  weapon = 'WEAPON_CARBINERIFLE' },
             { model = 's_m_y_blackops_02',  label = 'Rifleman 1',      offsetX = 3.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_GUARD_STAND',  weapon = 'WEAPON_CARBINERIFLE' },
@@ -779,7 +757,7 @@ Config.PresetGroups = {
     },
     {
         label = '🎖️ Military Checkpoint',
-        description = '8 peds — fortified checkpoint with guards and patrols (Cayo Island ready)',
+        description = '8 peds - fortified checkpoint with guards and patrols (Cayo Island ready)',
         peds = {
             { model = 's_m_y_blackops_01',  label = 'Gate Guard L',    offsetX = -2.0, offsetY = -6.0, offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_GUARD_STAND',  weapon = 'WEAPON_CARBINERIFLE' },
             { model = 's_m_y_blackops_02',  label = 'Gate Guard R',    offsetX = 2.0,  offsetY = -6.0, offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_GUARD_STAND',  weapon = 'WEAPON_CARBINERIFLE' },
@@ -793,7 +771,7 @@ Config.PresetGroups = {
     },
     {
         label = '🎉 Street Party',
-        description = '6 peds — partying, dancing, drinking',
+        description = '6 peds - partying, dancing, drinking',
         peds = {
             { model = 'a_m_y_hipster_01',  label = 'Dancer 1',      offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_PARTYING',  weapon = '' },
             { model = 'a_f_y_hipster_02',  label = 'Dancer 2',      offsetX = 2.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_PARTYING',  weapon = '' },
@@ -805,7 +783,7 @@ Config.PresetGroups = {
     },
     {
         label = '🏖️ Beach Party',
-        description = '16 peds — DJ, dancers, drinkers, sunbathers, muscle beach, bartender',
+        description = '16 peds - DJ, dancers, drinkers, sunbathers, muscle beach, bartender',
         peds = {
             -- DJ at the back, facing the dance floor
             { model = 'ig_djblamadon',      label = 'DJ',            offsetX = 0.0,  offsetY = 5.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_MUSICIAN',       weapon = '' },
@@ -834,7 +812,7 @@ Config.PresetGroups = {
     },
     {
         label = '🟢 Families Gang Party',
-        description = '17 peds — Families block party: dancers, hype crew, OGs, corner boy, arguing homies, armed lookouts',
+        description = '17 peds - Families block party: dancers, hype crew, OGs, corner boy, arguing homies, armed lookouts',
         peds = {
             -- Party host at the back, facing the crowd
             { model = 'g_m_y_famca_01',     label = 'Party Host',          offsetX = 0.0,  offsetY = 5.5,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_PARTYING',        weapon = '' },
@@ -865,7 +843,7 @@ Config.PresetGroups = {
     },
     {
         label = '🎰 Casino Floor Crowd',
-        description = '8 peds — high rollers, pit boss, security, wandering player (no partying)',
+        description = '8 peds - high rollers, pit boss, security, wandering player (no partying)',
         peds = {
             { model = 'a_m_y_business_03',   label = 'High Roller 1',    offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_STAND_IMPATIENT', weapon = '' },
             { model = 'a_m_m_bevhills_01',   label = 'High Roller 2',    offsetX = 2.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_DRINKING',        weapon = '' },
@@ -879,7 +857,7 @@ Config.PresetGroups = {
     },
     {
         label = '🛍️ Shopping Mall Crowd',
-        description = '6 peds — shoppers browsing, shopkeeper, tourist, phone walkers (no partying)',
+        description = '6 peds - shoppers browsing, shopkeeper, tourist, phone walkers (no partying)',
         peds = {
             { model = 'a_f_y_business_01',   label = 'Shopper 1',    offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_WINDOW_SHOP_BROWSE', weapon = '' },
             { model = 'a_m_y_hipster_01',    label = 'Shopper 2',    offsetX = 3.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_WINDOW_SHOP_BROWSE', weapon = '' },
@@ -891,7 +869,7 @@ Config.PresetGroups = {
     },
     {
         label = '💼 Office Bullpen',
-        description = '6 peds — clerks with clipboards, coffee break, phone calls (no partying)',
+        description = '6 peds - clerks with clipboards, coffee break, phone calls (no partying)',
         peds = {
             { model = 'a_m_y_business_01', label = 'Clerk 1',       offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_CLIPBOARD',    weapon = '' },
             { model = 'a_f_y_business_02', label = 'Clerk 2',       offsetX = 2.5,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_CLIPBOARD',    weapon = '' },
@@ -903,7 +881,7 @@ Config.PresetGroups = {
     },
     {
         label = '🏢 Apartment Lobby',
-        description = '5 peds — concierge, doorman, residents coming and going (no partying)',
+        description = '5 peds - concierge, doorman, residents coming and going (no partying)',
         peds = {
             { model = 'a_m_m_bevhills_01', label = 'Concierge',     offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_CLIPBOARD',    weapon = '' },
             { model = 's_m_m_security_01', label = 'Doorman',       offsetX = 0.0,  offsetY = -5.0, offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_GUARD_STAND',  weapon = '' },
@@ -914,7 +892,7 @@ Config.PresetGroups = {
     },
     {
         label = '🍽️ Restaurant / Diner',
-        description = '6 peds — seated diners, waiter, chef, bartender (no partying)',
+        description = '6 peds - seated diners, waiter, chef, bartender (no partying)',
         peds = {
             { model = 's_m_y_waiter_01',   label = 'Waiter',      offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'wander',   scenario = '',                           weapon = '' },
             { model = 's_m_y_chef_01',     label = 'Chef',        offsetX = -4.0, offsetY = 2.0,  offsetZ = 0.0, heading = 90.0,  behavior = 'scenario', scenario = 'WORLD_HUMAN_STAND_IMPATIENT', weapon = '' },
@@ -926,7 +904,7 @@ Config.PresetGroups = {
     },
     {
         label = '☕ Café / Coffee Shop',
-        description = '5 peds — barista and customers sipping coffee (no partying)',
+        description = '5 peds - barista and customers sipping coffee (no partying)',
         peds = {
             { model = 'mp_m_shopkeep_01',    label = 'Barista',       offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_STAND_IMPATIENT', weapon = '' },
             { model = 'a_f_y_hipster_02',    label = 'Customer 1',    offsetX = -3.0, offsetY = -2.0, offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_AA_COFFEE',       weapon = '' },
@@ -937,7 +915,7 @@ Config.PresetGroups = {
     },
     {
         label = '🏨 Hotel Lobby',
-        description = '6 peds — valet, concierge, tourists, business traveler, security (no partying)',
+        description = '6 peds - valet, concierge, tourists, business traveler, security (no partying)',
         peds = {
             { model = 's_m_y_valet_01',    label = 'Valet',         offsetX = 0.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 0.0,   behavior = 'scenario', scenario = 'WORLD_HUMAN_CAR_PARK_ATTENDANT', weapon = '' },
             { model = 'a_m_m_bevhills_01', label = 'Concierge',     offsetX = 3.0,  offsetY = 0.0,  offsetZ = 0.0, heading = 180.0, behavior = 'scenario', scenario = 'WORLD_HUMAN_CLIPBOARD',          weapon = '' },
@@ -949,17 +927,15 @@ Config.PresetGroups = {
     },
 }
 
--- ═══════════════════════════════════════════════════════════
---  GANG HOUSES — one per set, all built from the same layout
--- ═══════════════════════════════════════════════════════════
--- Every ped carries a pistol and is placed MORTAL (invincible = false), which
+--  gang houses, one per set, all built from the same layout
+-- Every ped carries a pistol and is placed mortal (invincible = false), which
 -- is what lets rr-gangwar run them: it arms them properly, makes every set hate
 -- every other set, sends them at rivals on sight and respawns the dead. Face
 -- the front door when you place one: the OG stands at the back, lookouts watch
 -- the street behind you, two roamers walk the block.
 --
--- `m` = { og, caller, corner, leaner, smoker, drinker, hang1, hang2, girl,
---         lookoutL, lookoutR, roam1, roam2 } — any entry may repeat a model.
+-- `m` = { og, caller, corner, leaner, smoker, drinker, hang1, hang2, girl
+--         lookoutL, lookoutR, roam1, roam2 }, any entry may repeat a model.
 local function GangHouse(emoji, name, m)
     local function P(model, label, x, y, h, behavior, scenario)
         return {
@@ -971,7 +947,7 @@ local function GangHouse(emoji, name, m)
     end
     return {
         label = emoji .. ' ' .. name .. ' Gang House',
-        description = '13 peds — armed set holding the house: OG, shot caller, corner boy, lookouts, roamers. All pistols, all mortal — rr-gangwar makes them fight rivals on sight',
+        description = '13 peds - armed set holding the house: OG, shot caller, corner boy, lookouts, roamers. All pistols, all mortal - rr-gangwar makes them fight rivals on sight',
         peds = {
             P(m[1],  'OG',           0.0,  5.0,  180.0, 'scenario', 'WORLD_HUMAN_STAND_IMPATIENT'),
             P(m[2],  'Shot Caller',  1.5,  4.5,  200.0, 'scenario', 'WORLD_HUMAN_STAND_MOBILE'),

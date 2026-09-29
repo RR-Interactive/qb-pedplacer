@@ -1,128 +1,82 @@
 # qb-pedplacer
 
-> Free and open source from [RR Interactive](https://playrosie.com), the team behind the ROSIE FiveM city.
-> [Docs](https://playrosie.com/docs/pedplacer/) · [Store page](https://playrosie.com/store/pedplacer/) · [Discord support](https://discord.gg/VMXzjgzN7R) · [All our scripts](https://playrosie.com/store/)
+Place NPCs anywhere in your city from an in-game menu and they stay there. They're saved to your database, come back after restarts, and stream in and out by distance so you don't fill up the ped pool.
 
-**Place, persist and manage world NPC peds — in-game, with a menu.**
+Free and open source from [RR Interactive](https://playrosie.com), the team behind the ROSIE FiveM city.
+[Docs](https://playrosie.com/docs/pedplacer/) · [Store page](https://playrosie.com/store/pedplacer/) · [Discord](https://discord.gg/VMXzjgzN7R) · [Our other scripts](https://playrosie.com/store/)
 
-`qb-pedplacer` is an admin tool for building living worlds. Walk up to a spot,
-open a menu, and drop an NPC that **stays there forever** (saved to your database)
-and streams in/out by distance so you never blow GTA's ped pool. Peds can idle,
-run any GTA scenario, walk patrol routes, wander, hold weapons, be frozen or
-invincible, and — uniquely — **loop any `scully_emotemenu` emote (with held props)
-as a permanent animation.** Group peds together to hide/show or delete a whole
-business at once. Also places persistent **radios/speakers** and **metal detectors**.
+## What it does
 
----
+- Peds are saved to MySQL and survive restarts
+- They only spawn when someone is nearby. If the game culls one (happens a lot in MLOs) it quietly respawns, so no more peds vanishing until you restart the resource
+- Loop any `scully_emotemenu` emote on a ped, props included (beer, clipboard, cigar and so on)
+- Behaviors: idle, any GTA scenario, patrol routes with multiple points, wander, and paired interactions
+- Weapons, freeze and invincibility per ped
+- Save nearby peds as a group, then hide, show or delete the whole group or a map area at runtime. Handy for businesses that open and close
+- Also places radios/speakers and metal detector props
+- A dashboard to browse, search and edit every placed ped
+- 300+ ped model presets plus scenarios, weapons and radio stations, all in the config
+- Exports so your other scripts can find and control placed peds
 
-## ✨ Features
+## Requirements
 
-- **Persistent peds** saved to MySQL — survive restarts and server reboots.
-- **Smart streaming + cull-detection** — peds spawn only when you're near, and if
-  the engine culls one (common in MLOs) it silently respawns. No more "peds vanish
-  until I restart the resource."
-- **Emote bridge** — loop ANY emote from `scully_emotemenu` (animation + held props
-  like a beer, clipboard, cigar) as a persistent ped scenario.
-- **Behaviors:** idle, GTA scenario, patrol route (multi-point), wander, and paired
-  interactions.
-- **Weapons, freeze, invincibility** per ped.
-- **Groups & area visibility** — save nearby peds as a named group; hide/show or
-  delete an entire group or map area at runtime (great for open/closed businesses).
-- **Bonus entities:** placeable radios/speakers and metal-detector props.
-- **Developer export API** (see below) — other resources can query and control peds.
-- **NUI management dashboard** — browse, search and edit every placed ped from a
-  visual interface (new in 1.6.0).
-- **Fully data-driven config** — 300+ ped-model presets, scenarios, weapons, radios.
+- [ox_lib](https://github.com/overextended/ox_lib)
+- oxmysql
+- qbx_core (Qbox)
 
----
+Optional, picked up automatically if you have them:
+- `scully_emotemenu` for the emote loops
+- `rr-bartender` so bartender peds take drink orders
+- a `metal-detectors` resource for the metal detector props
 
-## 📦 Requirements
+## Install
 
-**Required:** [`ox_lib`](https://github.com/overextended/ox_lib), `oxmysql`,
-`qbx_core` (Qbox)
+1. Put `qb-pedplacer` in your resources folder
+2. Import `sql/peds.sql` (the tables also get created on first start)
+3. Add `ensure qb-pedplacer` to your server.cfg
+4. Restart the server
 
-**Optional integrations** (auto-detected, degrade gracefully if absent):
-- `scully_emotemenu` — enables the emote bridge (place peds that loop emotes + props).
-- `rr-bartender` — bartender-behavior peds register as drink-order points.
-- A casino dealer placer + a `metal-detectors` resource — for those bonus entity types.
+## Using it
 
-Built for **Qbox** (`qbx_core` required). Admin permissions can also be granted
-via server ACE (see Permissions).
+Type `/pedplacer` in-game (you can rename the command with `Config.Command`). You need admin (`Config.RequiredPermission`, `admin` by default) or the `command.pedplacer` ace.
 
----
+Placing, moving, grouping, deleting, patrol routes and emotes are all done from the menus. Everything is stored in the database, not in code.
 
-## 🔧 Installation
+## Permissions
 
-1. Drop the `qb-pedplacer` folder into your `resources` directory.
-2. Import **`sql/peds.sql`** into your database (creates `placed_peds`, `ped_groups`,
-   `placed_radios`, `placed_metaldetectors`). Tables also self-create on first start.
-3. Add `ensure qb-pedplacer` to your `server.cfg`.
-4. Restart the server.
+On start the resource adds `add_ace group.admin command.pedplacer allow`. Give other staff access through your normal ace setup or change `Config.RequiredPermission`. The Qbox/QBCore permission check works too.
 
----
+## Exports
 
-## 🎮 Usage
+Client:
 
-- Open the placer menu in-game with **`/pedplacer`** (command configurable via
-  `Config.Command`).
-- Requires admin permission (`Config.RequiredPermission`, default `admin`) or the
-  server ACE `command.pedplacer`.
-- Everything else — placing, moving, grouping, deleting, patrol routes, emotes — is
-  done through the ox_lib menus. Placement data lives in the DB, not in code.
-
----
-
-## 🔐 Permissions
-
-Admin gating is ACE-based and configurable. On boot the resource runs:
-`add_ace group.admin command.pedplacer allow`. Grant additional admins via your
-normal ACE setup, or change `Config.RequiredPermission`. On QBCore/Qbox it also
-accepts that framework's permission check.
-
----
-
-## 🧩 Developer API (exports)
-
-**Client:**
-| Export | Purpose |
+| Export | What it returns |
 |---|---|
-| `exports['qb-pedplacer']:GetPedHandle(dbId)` | live ped entity handle for a DB id |
-| `exports['qb-pedplacer']:GetPedData(dbId)` | stored data for a placed ped |
+| `exports['qb-pedplacer']:GetPedHandle(dbId)` | the live ped entity for a database id |
+| `exports['qb-pedplacer']:GetPedData(dbId)` | the saved data for a placed ped |
 | `exports['qb-pedplacer']:GetPedsByGroup(name)` | peds in a named group |
-| `exports['qb-pedplacer']:GetGuardPeds()` | armed/guard peds (for defense scripts) |
-| `exports['qb-pedplacer']:GetSpawnedPeds()` | all currently-spawned placed peds |
+| `exports['qb-pedplacer']:GetGuardPeds()` | armed/guard peds |
+| `exports['qb-pedplacer']:GetSpawnedPeds()` | every placed ped that's spawned right now |
 
-**Server:**
-| Export | Purpose |
+Server:
+
+| Export | What it does |
 |---|---|
-| `exports['qb-pedplacer']:SetGroupHidden(group, hidden)` | despawn/respawn a whole group for everyone |
-| `exports['qb-pedplacer']:SetAreaHidden(key, x, y, radius, hidden)` | hide/show every placed ped in a radius |
+| `exports['qb-pedplacer']:SetGroupHidden(group, hidden)` | despawn or respawn a whole group for everyone |
+| `exports['qb-pedplacer']:SetAreaHidden(key, x, y, radius, hidden)` | hide or show every placed ped in a radius |
 
-Server callbacks (`lib.callback`) are also available: `getPeds`, `getGroups`,
-`getRadios`, `getDetectors`, `getHiddenGroups`, `getHiddenAreas`.
+There are also `lib.callback` callbacks: `getPeds`, `getGroups`, `getRadios`, `getDetectors`, `getHiddenGroups`, `getHiddenAreas`.
 
----
+## Config
 
-## ⚙️ Configuration highlights (`config.lua`)
-
-- `Config.Command` / `Config.RequiredPermission` — command + admin gate.
-- `Config.PermanentPeds` — keep peds permanently loaded vs. stream by distance
-  (leave `false` unless you place only a few dozen).
-- `Config.RenderDistance` — how close before a ped spawns.
-- `Config.PedModels` — 300+ categorized model presets buyers can extend.
-- `Config.Scenarios`, `Config.Weapons`, `Config.RadioStations`, `Config.SpeakerModels`,
-  `Config.PresetGroups` — all data-driven and editable.
-
----
-
-## Credits
-
-© RR Interactive. All rights reserved.
-
----
+- `Config.Command` / `Config.RequiredPermission`: the command and who can use it
+- `Config.PermanentPeds`: keep every ped loaded instead of streaming by distance. Leave it `false` unless you only have a few dozen
+- `Config.RenderDistance`: how close you get before a ped spawns
+- `Config.PedModels`: the model presets, add your own
+- `Config.Scenarios`, `Config.Weapons`, `Config.RadioStations`, `Config.SpeakerModels`, `Config.PresetGroups`
 
 ## License
 
-Released under the [GNU GPL v3.0](LICENSE). You can use, change and share it; if you share or sell a modified version, it has to stay open source under the same license.
+[GNU GPL v3.0](LICENSE). Use it, change it, share it. If you share or sell a modified version it has to stay open source.
 
 Made by [RR Interactive](https://playrosie.com).
